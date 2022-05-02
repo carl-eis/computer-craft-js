@@ -204,6 +204,7 @@ class TurtleEngine {
         detect = turtle.detectDown
         dig = turtle.digDown
         attack = turtle.attackDown
+        break;
       }
       default: {
         break;
