@@ -1,3 +1,4 @@
 node_modules
-*.lua
+main.lua
 .DS_Store
+.idea/
