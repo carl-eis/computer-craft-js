@@ -755,6 +755,26 @@ ____modules = {
             return c
         end
 
+        local __TS__Unpack = table.unpack or unpack
+
+        local function __TS__FunctionBind(fn, thisArg, ...)
+            local boundArgs = {...}
+            return function(____, ...)
+                local args = {...}
+                do
+                    local i = 0
+                    while i < #boundArgs do
+                        table.insert(args, i + 1, boundArgs[i + 1])
+                        i = i + 1
+                    end
+                end
+                return fn(
+                        thisArg,
+                        __TS__Unpack(args)
+                )
+            end
+        end
+
         local function __TS__StringSubstr(self, from, length)
             if from ~= from then
                 from = 0
@@ -848,16 +868,10 @@ ____modules = {
         local DIRECTIONS = DIRECTIONS or ({})
         DIRECTIONS.Down = "DOWN"
         DIRECTIONS.Forwards = "FORWARDS"
-        local function validateArgs(self, ...)
-            local args = {...}
-            if #args == 2 then
-                return true
-            else
-                print("Please specify length and width.")
-                print("Usage: miner <length> <width>")
-                return false
-            end
-        end
+        DIRECTIONS.Up = "UP"
+        local PROGRAMS = PROGRAMS or ({})
+        PROGRAMS.DIG = "dig"
+        PROGRAMS.TUNNEL = "tunnel"
         local function isFuel(self, index)
             if turtle.getItemCount(index) == 0 then
                 return false
@@ -865,8 +879,6 @@ ____modules = {
             local data = turtle.getItemDetail(index)
             local ____temp_0 = data
             local name = ____temp_0.name
-            local damage = ____temp_0.damage
-            local count = ____temp_0.count
             return __TS__ArrayIncludes(
                     __TS__ObjectValues(FUEL_TYPES),
                     name
@@ -911,7 +923,8 @@ ____modules = {
         end
         local TurtleEngine = __TS__Class()
         TurtleEngine.name = "TurtleEngine"
-        function TurtleEngine.prototype.____constructor(self, len, wid)
+        function TurtleEngine.prototype.____constructor(self, ...)
+            local args = {...}
             self.hasFuel = false
             self.xPos = 0
             self.yPos = 0
@@ -922,203 +935,530 @@ ____modules = {
             self.unloaded = 0
             self.amountMoves = 0
             self.maxMoves = 50
-            self.length = __TS__ParseInt(len, 10)
-            self.width = __TS__ParseInt(wid, 10)
-        end
-        function TurtleEngine.prototype.attemptRefuel(self, manualAmount)
-            local fuelLevel = turtle.getFuelLevel()
-            if fuelLevel == "unlimited" then
-                return true
-            end
-            local fuelRequiredToReturn = manualAmount or self.xPos + self.zPos + math.abs(self.yPos) + FUEL_BUFFER_AMOUNT
-            if fuelLevel > fuelRequiredToReturn then
-                return true
-            end
-            return refillFromAllSlots(nil, fuelRequiredToReturn)
-        end
-        function TurtleEngine.prototype.checkInitialFuel(self, isInitialCheck)
-            if isInitialCheck == nil then
-                isInitialCheck = false
-            end
-            self.hasFuel = checkFuelExists(nil)
-            if not self.hasFuel and isInitialCheck then
-                print("\nNo fuel found. Please add fuel into an inventory slot and try again.")
-                return
-            end
-        end
-        function TurtleEngine.prototype.logPosition(self)
-            return
-        end
-        function TurtleEngine.prototype.tryCollect(self)
-            local allSlotsFull = true
-            local totalItems = 0
-            do
-                local i = 0
-                while i < INVENTORY_SIZE do
-                    local count = turtle.getItemCount(i + 1)
-                    if count == 0 then
-                        allSlotsFull = false
-                    end
-                    totalItems = totalItems + count
-                    i = i + 1
+            self.validateArgs = function()
+                local programName = self.cliArguments[1]
+                local possiblePrograms = {PROGRAMS.DIG, PROGRAMS.TUNNEL}
+                local function printHelp()
+                    print("Please specify program name with arguments.")
+                    print("Usage:")
+                    print("dig <length> <width>")
+                    print("tunnel <width> <height> <length>")
                 end
-            end
-            if totalItems > self.collected then
-                self.collected = totalItems
-                if (self.collected + self.unloaded) % 50 == 0 then
-                    print(("Mined " .. tostring(self.collected + self.unloaded)) .. " items.")
+                if not __TS__ArrayIncludes(possiblePrograms, programName) then
+                    printHelp(nil)
+                    return false
                 end
-            end
-            if allSlotsFull then
-                print("No empty slots left")
-                return false
-            end
-            return true
-        end
-        function TurtleEngine.prototype.returnSupplies(self)
-            local ____temp_1 = self
-            local xPos = ____temp_1.xPos
-            local yPos = ____temp_1.yPos
-            local zPos = ____temp_1.zPos
-            local xDirection = ____temp_1.xDirection
-            local zDirection = ____temp_1.zDirection
-            print("Returning to surface...")
-            self:goTo(
-                    0,
-                    0,
-                    0,
-                    0,
-                    -1
-            )
-            local fuelNeeded = 2 * (xPos + yPos + zPos) + 1
-            if not self:attemptRefuel(fuelNeeded) then
-                self:unload(true)
-                print("Waiting for fuel")
-                while not self:attemptRefuel(fuelNeeded) do
-                    event:pullEventAs(event.TurtleInventoryEvent, "turtle_inventory")
-                end
-            else
-                self:unload(true)
-            end
-            print("Resuming mining...")
-            self:goTo(
-                    xPos,
-                    yPos,
-                    zPos,
-                    xDirection,
-                    zDirection
-            )
-        end
-        function TurtleEngine.prototype.unload(self, keepOneFuelStack)
-            if keepOneFuelStack == nil then
-                keepOneFuelStack = true
-            end
-            print("Unloading items...")
-            do
-                local i = 0
-                while i < INVENTORY_SIZE do
-                    local slotIndex = i + 1
-                    local amountItemsInSlot = turtle.getItemCount(slotIndex)
-                    if amountItemsInSlot > 0 then
-                        turtle.select(slotIndex)
-                        local shouldDrop = true
-                        if keepOneFuelStack and turtle.refuel(0) then
-                            shouldDrop = false
-                            keepOneFuelStack = false
-                        end
-                        if shouldDrop then
-                            turtle.drop()
-                            self.unloaded = self.unloaded + amountItemsInSlot
+                repeat
+                    local ____switch17 = programName
+                    local ____cond17 = ____switch17 == PROGRAMS.DIG
+                    if ____cond17 then
+                        do
+                            if #self.cliArguments == 3 then
+                                self.selectedProgram = PROGRAMS.DIG
+                                return true
+                            else
+                                print("Usage:")
+                                print("dig <length> <width>")
+                                return false
+                            end
                         end
                     end
-                    i = i + 1
+                    ____cond17 = ____cond17 or ____switch17 == PROGRAMS.TUNNEL
+                    if ____cond17 then
+                        do
+                            if #self.cliArguments == 4 then
+                                self.selectedProgram = PROGRAMS.TUNNEL
+                                return true
+                            else
+                                print("Usage:")
+                                print("tunnel <width> <height> <length>")
+                                return false
+                            end
+                        end
+                    end
+                    do
+                        do
+                            printHelp(nil)
+                            return false
+                        end
+                    end
+                until true
+            end
+            self.attemptRefuel = function(____, manualAmount)
+                local fuelLevel = turtle.getFuelLevel()
+                if fuelLevel == "unlimited" then
+                    return true
+                end
+                local fuelRequiredToReturn = manualAmount or self.xPos + self.zPos + math.abs(self.yPos) + FUEL_BUFFER_AMOUNT
+                if fuelLevel > fuelRequiredToReturn then
+                    return true
+                end
+                return refillFromAllSlots(nil, fuelRequiredToReturn)
+            end
+            self.checkInitialFuel = function(____, isInitialCheck)
+                if isInitialCheck == nil then
+                    isInitialCheck = false
+                end
+                self.hasFuel = checkFuelExists(nil)
+                if not self.hasFuel and isInitialCheck then
+                    print("\nNo fuel found. Please add fuel into an inventory slot and try again.")
+                    return
                 end
             end
-            self.collected = 0
-            turtle.select(1)
-        end
-        function TurtleEngine.prototype.goTo(self, x, y, z, xDir, zDir)
-            while self.yPos > y do
-                print((((("moving up: " .. tostring(self.xPos)) .. " ") .. tostring(self.yPos)) .. " ") .. tostring(self.zPos))
-                if turtle.up() then
-                    self.yPos = self.yPos - 1
-                elseif turtle.digUp() or turtle.attackUp() then
-                    self:tryCollect()
+            self.tryCollect = function()
+                local allSlotsFull = true
+                local totalItems = 0
+                do
+                    local i = 0
+                    while i < INVENTORY_SIZE do
+                        local count = turtle.getItemCount(i + 1)
+                        if count == 0 then
+                            allSlotsFull = false
+                        end
+                        totalItems = totalItems + count
+                        i = i + 1
+                    end
+                end
+                if totalItems > self.collected then
+                    self.collected = totalItems
+                    if (self.collected + self.unloaded) % 50 == 0 then
+                        print(("Mined " .. tostring(self.collected + self.unloaded)) .. " items.")
+                    end
+                end
+                if allSlotsFull then
+                    print("No empty slots left")
+                    return false
+                end
+                return true
+            end
+            self.returnSupplies = function(____, resume)
+                if resume == nil then
+                    resume = true
+                end
+                local ____temp_1 = self
+                local xPos = ____temp_1.xPos
+                local yPos = ____temp_1.yPos
+                local zPos = ____temp_1.zPos
+                local xDirection = ____temp_1.xDirection
+                local zDirection = ____temp_1.zDirection
+                print("Returning to surface...")
+                self:goTo(
+                        0,
+                        0,
+                        0,
+                        0,
+                        -1
+                )
+                if not resume then
+                    self:unload(true)
+                    self:turnRight()
+                    self:turnRight()
+                    return
+                end
+                local fuelNeeded = 2 * (xPos + yPos + zPos) + 1
+                if not self:attemptRefuel(fuelNeeded) then
+                    self:unload(true)
+                    print("Waiting for fuel")
+                    while not self:attemptRefuel(fuelNeeded) do
+                        event:pullEventAs(event.TurtleInventoryEvent, "turtle_inventory")
+                    end
                 else
-                    sleep(0.5)
+                    self:unload(true)
                 end
+                print("Resuming mining...")
+                self:goTo(
+                        xPos,
+                        yPos,
+                        zPos,
+                        xDirection,
+                        zDirection
+                )
             end
-            if self.xPos > x then
-                while self.xDirection ~= -1 do
-                    self:turnLeft()
+            self.unload = function(____, keepOneFuelStack)
+                if keepOneFuelStack == nil then
+                    keepOneFuelStack = true
                 end
-                while self.xPos > x do
-                    print((((("moving sideways X: " .. tostring(self.xPos)) .. " ") .. tostring(self.yPos)) .. " ") .. tostring(self.zPos))
-                    if turtle.forward() then
-                        self.xPos = self.xPos - 1
-                    elseif turtle.dig() or turtle.attack() then
+                print("Unloading items...")
+                do
+                    local i = 0
+                    while i < INVENTORY_SIZE do
+                        local slotIndex = i + 1
+                        local amountItemsInSlot = turtle.getItemCount(slotIndex)
+                        if amountItemsInSlot > 0 then
+                            turtle.select(slotIndex)
+                            local shouldDrop = true
+                            if keepOneFuelStack and turtle.refuel(0) then
+                                shouldDrop = false
+                                keepOneFuelStack = false
+                            end
+                            if shouldDrop then
+                                turtle.drop()
+                                self.unloaded = self.unloaded + amountItemsInSlot
+                            end
+                        end
+                        i = i + 1
+                    end
+                end
+                self.collected = 0
+                turtle.select(1)
+            end
+            self.goTo = function(____, x, y, z, xDir, zDir)
+                while self.yPos > y do
+                    if turtle.up() then
+                        self.yPos = self.yPos - 1
+                    elseif turtle.digUp() or turtle.attackUp() then
                         self:tryCollect()
                     else
                         sleep(0.5)
                     end
                 end
-            elseif self.xPos < x then
-                while self.xDirection ~= 1 do
-                    self:turnLeft()
+                if self.xPos > x then
+                    while self.xDirection ~= -1 do
+                        self:turnLeft()
+                    end
+                    while self.xPos > x do
+                        if turtle.forward() then
+                            self.xPos = self.xPos - 1
+                        elseif turtle.dig() or turtle.attack() then
+                            self:tryCollect()
+                        else
+                            sleep(0.5)
+                        end
+                    end
+                elseif self.xPos < x then
+                    while self.xDirection ~= 1 do
+                        self:turnLeft()
+                    end
+                    while self.xPos < x do
+                        if turtle.forward() then
+                            self.xPos = self.xPos + 1
+                        elseif turtle.dig() or turtle.attack() then
+                            self:tryCollect()
+                        else
+                            sleep(0.5)
+                        end
+                    end
                 end
-                while self.xPos < x do
-                    print((((("moving sideways X: " .. tostring(self.xPos)) .. " ") .. tostring(self.yPos)) .. " ") .. tostring(self.zPos))
-                    if turtle.forward() then
-                        self.xPos = self.xPos + 1
-                    elseif turtle.dig() or turtle.attack() then
+                if self.zPos > z then
+                    while self.zDirection ~= -1 do
+                        self:turnLeft()
+                    end
+                    while self.zPos > z do
+                        if turtle.forward() then
+                            self.zPos = self.zPos - 1
+                        elseif turtle.dig() or turtle.attack() then
+                            self:tryCollect()
+                        else
+                            sleep(0.5)
+                        end
+                    end
+                elseif self.zPos < z then
+                    while self.zDirection ~= 1 do
+                        self:turnLeft()
+                    end
+                    while self.zPos < z do
+                        if turtle.forward() then
+                            self.zPos = self.zPos + 1
+                        elseif turtle.dig() or turtle.attack() then
+                            self:tryCollect()
+                        else
+                            sleep(0.5)
+                        end
+                    end
+                end
+                while self.yPos < y do
+                    if turtle.down() then
+                        self.yPos = self.yPos + 1
+                    elseif turtle.digDown() or turtle.attackDown() then
                         self:tryCollect()
                     else
                         sleep(0.5)
                     end
                 end
-            end
-            if self.zPos > z then
-                while self.zDirection ~= -1 do
+                while self.zDirection ~= zDir or self.xDirection ~= xDir do
                     self:turnLeft()
                 end
-                while self.zPos > z do
-                    print((((("moving sideways Z: " .. tostring(self.xPos)) .. " ") .. tostring(self.yPos)) .. " ") .. tostring(self.zPos))
-                    if turtle.forward() then
-                        self.zPos = self.zPos - 1
-                    elseif turtle.dig() or turtle.attack() then
-                        self:tryCollect()
-                    else
-                        sleep(0.5)
+            end
+            self.tryDirection = function(____, direction)
+                if not self:attemptRefuel() then
+                    print("\nOut of fuel. Returning to surface")
+                    self:returnSupplies()
+                end
+                local function collectOrReturn()
+                    if not self:tryCollect() then
+                        print("\nUnable to collect, returning back to base.")
+                        self:returnSupplies()
                     end
                 end
-            elseif self.zPos < z then
-                while self.zDirection ~= 1 do
-                    self:turnLeft()
-                end
-                while self.zPos < z do
-                    print((((("moving sideways Z: " .. tostring(self.xPos)) .. " ") .. tostring(self.yPos)) .. " ") .. tostring(self.zPos))
-                    if turtle.forward() then
-                        self.zPos = self.zPos + 1
-                    elseif turtle.dig() or turtle.attack() then
-                        self:tryCollect()
+                local move
+                local detect
+                local dig
+                local attack
+                repeat
+                    local ____switch84 = direction
+                    local ____cond84 = ____switch84 == DIRECTIONS.Forwards
+                    if ____cond84 then
+                        do
+                            move = turtle.forward
+                            detect = turtle.detect
+                            dig = turtle.dig
+                            attack = turtle.attack
+                            break
+                        end
+                    end
+                    ____cond84 = ____cond84 or ____switch84 == DIRECTIONS.Down
+                    if ____cond84 then
+                        do
+                            move = turtle.down
+                            detect = turtle.detectDown
+                            dig = turtle.digDown
+                            attack = turtle.attackDown
+                            break
+                        end
+                    end
+                    ____cond84 = ____cond84 or ____switch84 == DIRECTIONS.Up
+                    if ____cond84 then
+                        do
+                            move = turtle.up
+                            detect = turtle.detectUp
+                            dig = turtle.digUp
+                            attack = turtle.attackUp
+                            break
+                        end
+                    end
+                    do
+                        do
+                            break
+                        end
+                    end
+                until true
+                while not move(nil) do
+                    if detect(nil) then
+                        if dig(nil) then
+                            collectOrReturn(nil)
+                        else
+                            print("Unable to dig. Possibly stuck")
+                            return false
+                        end
+                    elseif attack(nil) then
+                        collectOrReturn(nil)
                     else
-                        sleep(0.5)
+                        sleep(0.1)
+                    end
+                end
+                repeat
+                    local ____switch95 = direction
+                    local ____cond95 = ____switch95 == DIRECTIONS.Forwards
+                    if ____cond95 then
+                        do
+                            self.xPos = self.xPos + self.xDirection
+                            self.zPos = self.zPos + self.zDirection
+                            self.amountMoves = self.amountMoves + 1
+                            break
+                        end
+                    end
+                    ____cond95 = ____cond95 or ____switch95 == DIRECTIONS.Down
+                    if ____cond95 then
+                        do
+                            self.yPos = self.yPos + 1
+                            if self.yPos % 10 == 0 then
+                                print(("Descended " .. tostring(self.yPos)) .. " metres.")
+                            end
+                            self.amountMoves = self.amountMoves + 1
+                            break
+                        end
+                    end
+                    ____cond95 = ____cond95 or ____switch95 == DIRECTIONS.Up
+                    if ____cond95 then
+                        do
+                            self.yPos = self.yPos - 1
+                            self.amountMoves = self.amountMoves + 1
+                            break
+                        end
+                    end
+                    do
+                        do
+                            break
+                        end
+                    end
+                until true
+                return true
+            end
+            self.tryForwards = function() return self:tryDirection(DIRECTIONS.Forwards) end
+            self.tryDown = function() return self:tryDirection(DIRECTIONS.Down) end
+            self.tryUp = function() return self:tryDirection(DIRECTIONS.Up) end
+            self.dig = function()
+                if not self:attemptRefuel() then
+                    print("Out of fuel.")
+                    return
+                end
+                print("Digging...")
+                local done = false
+                local alternate = 0
+                while not done do
+                    do
+                        local widthMined = 0
+                        while widthMined < self.width do
+                            do
+                                local lengthMined = 0
+                                while lengthMined < self.length - 1 do
+                                    if not self:tryForwards() then
+                                        done = true
+                                        break
+                                    end
+                                    lengthMined = lengthMined + 1
+                                end
+                            end
+                            if done then
+                                break
+                            end
+                            if widthMined < self.width - 1 then
+                                if (widthMined + 1 + alternate) % 2 == 0 then
+                                    self:turnLeft()
+                                    if not self:tryForwards() then
+                                        done = true
+                                        break
+                                    end
+                                    self:turnLeft()
+                                else
+                                    self:turnRight()
+                                    if not self:tryForwards() then
+                                        done = true
+                                        break
+                                    end
+                                    self:turnRight()
+                                end
+                            end
+                            widthMined = widthMined + 1
+                        end
+                    end
+                    if done then
+                        break
+                    end
+                    if self.width > 1 then
+                        if self.width % 2 == 0 then
+                            self:turnRight()
+                        else
+                            if alternate == 0 then
+                                self:turnLeft()
+                            else
+                                self:turnRight()
+                            end
+                            alternate = 1 - alternate
+                        end
+                    end
+                    if not self:tryDown() then
+                        done = true
+                        break
                     end
                 end
             end
-            while self.yPos < y do
-                print((((("moving down: " .. tostring(self.xPos)) .. " ") .. tostring(self.yPos)) .. " ") .. tostring(self.zPos))
-                if turtle.down() then
-                    self.yPos = self.yPos + 1
-                elseif turtle.digDown() or turtle.attackDown() then
-                    self:tryCollect()
-                else
-                    sleep(0.5)
+            self.tunnel = function()
+                if not self:attemptRefuel() then
+                    print("Out of fuel.")
+                    return
                 end
+                print("Tunneling...")
+                local done = false
+                local alternate = 0
+                local isMiningUp = true
+                if not self:tryForwards() then
+                    return
+                end
+                self:turnRight()
+                do
+                    local lengthMined = 0
+                    while lengthMined < self.length do
+                        do
+                            local widthMined = 0
+                            while widthMined < self.width do
+                                do
+                                    local heightMined = 0
+                                    while heightMined < self.height - 1 do
+                                        local ____isMiningUp_2
+                                        if isMiningUp then
+                                            ____isMiningUp_2 = self.tryUp
+                                        else
+                                            ____isMiningUp_2 = self.tryDown
+                                        end
+                                        local miningMethod = ____isMiningUp_2
+                                        if not miningMethod(nil) then
+                                            done = true
+                                            break
+                                        end
+                                        heightMined = heightMined + 1
+                                    end
+                                end
+                                isMiningUp = not isMiningUp
+                                if widthMined < self.width - 1 then
+                                    if not self:tryForwards() then
+                                        done = true
+                                        break
+                                    end
+                                end
+                                widthMined = widthMined + 1
+                            end
+                        end
+                        if lengthMined < self.length - 1 then
+                            local ____temp_3
+                            if alternate == 0 then
+                                ____temp_3 = self.turnLeft
+                            else
+                                ____temp_3 = self.turnRight
+                            end
+                            local turnDirection = ____temp_3
+                            turnDirection(nil)
+                            if not self:tryForwards() then
+                                done = true
+                                break
+                            end
+                            turnDirection(nil)
+                            alternate = 1 - alternate
+                        end
+                        lengthMined = lengthMined + 1
+                    end
+                end
+                print("Job complete, returning.")
+                self:returnSupplies(false)
             end
-            while self.zDirection ~= zDir or self.xDirection ~= xDir do
-                self:turnLeft()
+            self.runSelectedProgram = function()
+                repeat
+                    local ____switch135 = self.selectedProgram
+                    local ____cond135 = ____switch135 == PROGRAMS.DIG
+                    if ____cond135 then
+                        do
+                            self.length = __TS__ParseInt(self.cliArguments[2], 10)
+                            self.width = __TS__ParseInt(self.cliArguments[3], 10)
+                            self:dig()
+                            return
+                        end
+                    end
+                    ____cond135 = ____cond135 or ____switch135 == PROGRAMS.TUNNEL
+                    if ____cond135 then
+                        do
+                            self.width = __TS__ParseInt(self.cliArguments[2], 10)
+                            self.height = __TS__ParseInt(self.cliArguments[3], 10)
+                            self.length = __TS__ParseInt(self.cliArguments[4], 10)
+                            self:tunnel()
+                            return
+                        end
+                    end
+                    do
+                        do
+                            return
+                        end
+                    end
+                until true
             end
+            self.cliArguments = args
+            self.height = 0
+            self.length = 0
+            self.width = 0
+            self.tryUp = __TS__FunctionBind(self.tryUp, self)
+            self.tryDown = __TS__FunctionBind(self.tryDown, self)
+            self.tryForwards = __TS__FunctionBind(self.tryForwards, self)
+            self.turnRight = __TS__FunctionBind(self.turnRight, self)
+            self.turnLeft = __TS__FunctionBind(self.turnLeft, self)
         end
         function TurtleEngine.prototype.turnLeft(self)
             turtle.turnLeft()
@@ -1133,193 +1473,15 @@ ____modules = {
             self.xDirection = self.zDirection
             self.zDirection = -prevXDirection
         end
-        function TurtleEngine.prototype.tryDirection(self, direction)
-            if not self:attemptRefuel() then
-                print("\nOut of fuel. Returning to surface")
-                self:returnSupplies()
-            end
-            local function collectOrReturn()
-                if not self:tryCollect() then
-                    print("\nUnable to collect, returning back to base.")
-                    self:returnSupplies()
-                end
-            end
-            if self.amountMoves >= self.maxMoves then
-                print("Stopping due to max moves reached")
-                self:returnSupplies()
-            end
-            local move
-            local detect
-            local dig
-            local attack
-            repeat
-                local ____switch79 = direction
-                local ____cond79 = ____switch79 == DIRECTIONS.Forwards
-                if ____cond79 then
-                    do
-                        move = turtle.forward
-                        detect = turtle.detect
-                        dig = turtle.dig
-                        attack = turtle.attack
-                        break
-                    end
-                end
-                ____cond79 = ____cond79 or ____switch79 == DIRECTIONS.Down
-                if ____cond79 then
-                    do
-                        move = turtle.down
-                        detect = turtle.detectDown
-                        dig = turtle.digDown
-                        attack = turtle.attackDown
-                        break
-                    end
-                end
-                do
-                    do
-                        break
-                    end
-                end
-            until true
-            print("before move")
-            self:logPosition()
-            while not move(nil) do
-                if detect(nil) then
-                    if dig(nil) then
-                        collectOrReturn(nil)
-                    else
-                        print("Unable to dig. Possibly stuck")
-                        return false
-                    end
-                elseif attack(nil) then
-                    collectOrReturn(nil)
-                else
-                    sleep(0.5)
-                end
-            end
-            repeat
-                local ____switch89 = direction
-                local ____cond89 = ____switch89 == DIRECTIONS.Forwards
-                if ____cond89 then
-                    do
-                        self.xPos = self.xPos + self.xDirection
-                        self.zPos = self.zPos + self.zDirection
-                        self.amountMoves = self.amountMoves + 1
-                        break
-                    end
-                end
-                ____cond89 = ____cond89 or ____switch89 == DIRECTIONS.Down
-                if ____cond89 then
-                    do
-                        self.yPos = self.yPos + 1
-                        if self.yPos % 10 == 0 then
-                            print(("Descended " .. tostring(self.yPos)) .. " metres.")
-                        end
-                        self.amountMoves = self.amountMoves + 1
-                        break
-                    end
-                end
-                do
-                    do
-                        break
-                    end
-                end
-            until true
-            return true
-        end
-        function TurtleEngine.prototype.tryForwards(self)
-            return self:tryDirection(DIRECTIONS.Forwards)
-        end
-        function TurtleEngine.prototype.tryDown(self)
-            return self:tryDirection(DIRECTIONS.Down)
-        end
-        function TurtleEngine.prototype.start(self)
-            if not self:attemptRefuel() then
-                print("Out of fuel.")
-                return
-            end
-            print("Excavating...")
-            local reseal = false
-            local done = false
-            local alternate = 0
-            while not done do
-                do
-                    local widthMined = 0
-                    while widthMined < self.width do
-                        do
-                            local lengthMined = 0
-                            while lengthMined < self.length - 1 do
-                                print("length mined: ", lengthMined)
-                                if not self:tryForwards() then
-                                    done = true
-                                    break
-                                end
-                                lengthMined = lengthMined + 1
-                            end
-                        end
-                        if done then
-                            break
-                        end
-                        print("width mined: ", widthMined)
-                        if widthMined < self.width - 1 then
-                            if (widthMined + 1 + alternate) % 2 == 0 then
-                                print("turning left")
-                                self:turnLeft()
-                                if not self:tryForwards() then
-                                    done = true
-                                    break
-                                end
-                                print("turning left again")
-                                self:turnLeft()
-                            else
-                                print("turning right")
-                                self:turnRight()
-                                if not self:tryForwards() then
-                                    done = true
-                                    break
-                                end
-                                print("turning right again")
-                                self:turnRight()
-                            end
-                        else
-                            print("Repositioning to go down...")
-                        end
-                        widthMined = widthMined + 1
-                    end
-                end
-                if done then
-                    break
-                end
-                if self.width > 1 then
-                    if self.width % 2 == 0 then
-                        self:turnRight()
-                    else
-                        if alternate == 0 then
-                            self:turnLeft()
-                        else
-                            self:turnRight()
-                        end
-                        alternate = 1 - alternate
-                    end
-                end
-                if not self:tryDown() then
-                    done = true
-                    break
-                end
-            end
-        end
         local function main(self, ...)
-            local args = {...}
             print("\nExcavator Pro by MeguminGG")
             print("https://github.com/carl-eis")
             print("------------------------------------")
-            print("Excavation initiated, please monitor occasionally.")
-            if not validateArgs(nil, ...) then
+            local TurtleInstance = __TS__New(TurtleEngine, ...)
+            if not TurtleInstance:validateArgs() then
                 return
             end
-            local length = args[1]
-            local width = args[2]
-            local TurtleInstance = __TS__New(TurtleEngine, length, width)
-            TurtleInstance:start()
+            TurtleInstance:runSelectedProgram()
         end
         main(nil, ...)
         return ____exports
