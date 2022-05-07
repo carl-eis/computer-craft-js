@@ -16,20 +16,16 @@ const FUEL_BUFFER_AMOUNT = 2
 
 enum DIRECTIONS {
   Down = 'DOWN',
-  Forwards = 'FORWARDS'
+  Forwards = 'FORWARDS',
+  Up = 'UP'
+}
+
+enum PROGRAMS {
+  DIG = 'dig',
+  TUNNEL = 'tunnel'
 }
 
 /* =================== Helpers ===================*/
-
-function validateArgs(...args) {
-  if (args.length === 2) {
-    return true
-  } else {
-    print('Please specify length and width.')
-    print('Usage: miner <length> <width>')
-    return false
-  }
-}
 
 function isFuel(index: number): boolean {
   if (turtle.getItemCount(index) === 0) {
@@ -37,7 +33,7 @@ function isFuel(index: number): boolean {
   }
 
   const data = turtle.getItemDetail(index)
-  const { name, damage, count } = data as any
+  const { name } = data as any
 
   return Object.values(FUEL_TYPES).includes(name);
 }
@@ -83,6 +79,7 @@ function refillFromAllSlots(fuelRequiredToReturn: number): boolean {
 /* =================== Main ===================*/
 
 class TurtleEngine {
+  private selectedProgram: string
   private hasFuel = false
 
   private xPos = 0
@@ -96,8 +93,9 @@ class TurtleEngine {
   private xDirection = 0
   private zDirection = 1
 
-  private readonly length: number
-  private readonly width: number
+  private length: number
+  private width: number
+  private height: number
 
   private collected = 0
   private unloaded = 0
@@ -105,11 +103,71 @@ class TurtleEngine {
   private amountMoves = 0
   private maxMoves = 50
 
+  private readonly cliArguments: string[]
+
   constructor(
-    len: string, wid: string
+    ...args
   ) {
-    this.length = parseInt(len, 10)
-    this.width = parseInt(wid, 10)
+    this.cliArguments = args
+
+    // Defaults
+    this.height = 0
+    this.length = 0
+    this.width = 0
+
+    this.tryUp = this.tryUp.bind(this)
+    this.tryDown = this.tryDown.bind(this)
+    this.tryForwards = this.tryForwards.bind(this)
+
+    this.turnRight = this.turnRight.bind(this)
+    this.turnLeft = this.turnLeft.bind(this)
+  }
+
+  validateArgs = () => {
+    const programName: PROGRAMS = this.cliArguments[0] as PROGRAMS
+    const possiblePrograms = [
+      PROGRAMS.DIG,
+      PROGRAMS.TUNNEL
+    ]
+
+    const printHelp = () => {
+      print('Please specify program name with arguments.')
+      print('Usage:')
+      print('dig <length> <width>')
+      print('tunnel <width> <height> <length>')
+    }
+
+    if (!possiblePrograms.includes(programName)) {
+      printHelp()
+      return false
+    }
+
+    switch(programName) {
+      case PROGRAMS.DIG: {
+        if (this.cliArguments.length === 3) {
+          this.selectedProgram = PROGRAMS.DIG
+          return true
+        } else {
+          print('Usage:')
+          print('dig <length> <width>')
+          return false
+        }
+      }
+      case PROGRAMS.TUNNEL: {
+        if (this.cliArguments.length === 4) {
+          this.selectedProgram = PROGRAMS.TUNNEL
+          return true
+        } else {
+          print('Usage:')
+          print('tunnel <width> <height> <length>')
+          return false
+        }
+      }
+      default: {
+        printHelp()
+        return false
+      }
+    }
   }
 
   /**
@@ -117,7 +175,7 @@ class TurtleEngine {
    * to return home. Will return false if unsuccessful.
    * @param manualAmount
    */
-  attemptRefuel(manualAmount?: number): boolean {
+  attemptRefuel = (manualAmount?: number): boolean => {
     const fuelLevel = turtle.getFuelLevel()
     if ((fuelLevel as any) === "unlimited") {
       return true
@@ -133,7 +191,7 @@ class TurtleEngine {
     return refillFromAllSlots(fuelRequiredToReturn)
   }
 
-  checkInitialFuel(isInitialCheck = false): void {
+  checkInitialFuel = (isInitialCheck = false): void => {
     this.hasFuel = checkFuelExists()
     if (!this.hasFuel && isInitialCheck) {
       print('\nNo fuel found. Please add fuel into an inventory slot and try again.')
@@ -141,20 +199,14 @@ class TurtleEngine {
     }
   }
 
-  logPosition() {
-    return
-    print(`current position: x ${this.xPos} z ${this.zPos} y ${this.yPos}`)
-    print(`xDir ${this.xDirection} zDir ${this.zDirection}`)
-    sleep(0.5)
-  }
-
   /**
    * Check the total against the previous total
    * to see if we have collected anything.
    *
-   * Returns true if turtle picked something up.
+   * Returns true if turtle picked something up,
+   * or if there are still empty slots available
    */
-  tryCollect(): boolean {
+  tryCollect = (): boolean => {
     let allSlotsFull = true
     let totalItems = 0
 
@@ -179,12 +231,19 @@ class TurtleEngine {
     }
 
     return true
-  }
+  };
 
-  returnSupplies(): void {
+  returnSupplies = (resume = true): void => {
     const { xPos, yPos, zPos, xDirection, zDirection } = this
     print('Returning to surface...')
     this.goTo(0, 0, 0, 0, -1)
+
+    if (!resume) {
+      this.unload(true)
+      this.turnRight()
+      this.turnRight()
+      return
+    }
 
     const fuelNeeded = 2 * (xPos + yPos + zPos) + 1
     if (!this.attemptRefuel(fuelNeeded)) {
@@ -199,9 +258,9 @@ class TurtleEngine {
 
     print('Resuming mining...')
     this.goTo(xPos, yPos, zPos, xDirection, zDirection)
-  }
+  };
 
-  unload(keepOneFuelStack: boolean = true): void {
+  unload = (keepOneFuelStack: boolean = true): void => {
     print('Unloading items...')
     for (let i = 0; i < INVENTORY_SIZE; i++) {
       const slotIndex = i + 1
@@ -222,12 +281,11 @@ class TurtleEngine {
     }
     this.collected = 0
     turtle.select(1)
-  }
+  };
 
-  goTo(x: number, y: number, z: number, xDir: number, zDir: number) {
+  goTo = (x: number, y: number, z: number, xDir: number, zDir: number) => {
     // Move up
     while (this.yPos > y) {
-      print(`moving up: ${this.xPos} ${this.yPos} ${this.zPos}`)
       if (turtle.up()) {
         this.yPos--
       } else if (turtle.digUp() || turtle.attackUp()) {
@@ -243,7 +301,6 @@ class TurtleEngine {
         this.turnLeft()
       }
       while (this.xPos > x) {
-        print(`moving sideways X: ${this.xPos} ${this.yPos} ${this.zPos}`)
         if (turtle.forward()) {
           this.xPos--
         } else if (turtle.dig() || turtle.attack()) {
@@ -257,7 +314,6 @@ class TurtleEngine {
         this.turnLeft()
       }
       while (this.xPos < x) {
-        print(`moving sideways X: ${this.xPos} ${this.yPos} ${this.zPos}`)
         if (turtle.forward()) {
           this.xPos++
         } else if (turtle.dig() || turtle.attack()) {
@@ -274,7 +330,6 @@ class TurtleEngine {
         this.turnLeft()
       }
       while (this.zPos > z) {
-        print(`moving sideways Z: ${this.xPos} ${this.yPos} ${this.zPos}`)
         if (turtle.forward()) {
           this.zPos--
         } else if (turtle.dig() || turtle.attack()) {
@@ -288,7 +343,6 @@ class TurtleEngine {
         this.turnLeft()
       }
       while (this.zPos < z) {
-        print(`moving sideways Z: ${this.xPos} ${this.yPos} ${this.zPos}`)
         if (turtle.forward()) {
           this.zPos++
         } else if (turtle.dig() || turtle.attack()) {
@@ -301,7 +355,6 @@ class TurtleEngine {
 
     // move down
     while (this.yPos < y) {
-      print(`moving down: ${this.xPos} ${this.yPos} ${this.zPos}`)
       if (turtle.down()) {
         this.yPos++
       } else if (turtle.digDown() || turtle.attackDown()) {
@@ -314,7 +367,7 @@ class TurtleEngine {
     while(this.zDirection != zDir || this.xDirection !== xDir) {
       this.turnLeft()
     }
-  }
+  };
 
   turnLeft() {
     turtle.turnLeft()
@@ -332,7 +385,7 @@ class TurtleEngine {
     this.zDirection = -prevXDirection
   }
 
-  tryDirection(direction: DIRECTIONS): boolean {
+  tryDirection = (direction: DIRECTIONS): boolean => {
     if (!this.attemptRefuel()) {
       print('\nOut of fuel. Returning to surface')
       this.returnSupplies()
@@ -370,13 +423,17 @@ class TurtleEngine {
         attack = turtle.attackDown
         break;
       }
+      case DIRECTIONS.Up: {
+        move = turtle.up
+        detect = turtle.detectUp
+        dig = turtle.digUp
+        attack = turtle.attackUp
+        break;
+      }
       default: {
         break;
       }
     }
-
-    print('before move')
-    this.logPosition()
 
     /**
      * If the turtle is blocked,
@@ -395,7 +452,7 @@ class TurtleEngine {
       } else if (attack()) {
         collectOrReturn()
       } else {
-        sleep(0.5)
+        sleep(0.1)
       }
     }
 
@@ -415,43 +472,39 @@ class TurtleEngine {
         this.amountMoves++
         break;
       }
+      case DIRECTIONS.Up: {
+        this.yPos -= 1
+        this.amountMoves++
+        break;
+      }
       default: {
         break;
       }
     }
 
     return true
-  }
+  };
 
-  tryForwards() {
-    return this.tryDirection(DIRECTIONS.Forwards)
-  }
+  tryForwards = () => this.tryDirection(DIRECTIONS.Forwards);
 
-  tryDown() {
-    return this.tryDirection(DIRECTIONS.Down)
-  }
+  tryDown = () => this.tryDirection(DIRECTIONS.Down);
 
-  public start() {
-    // this.checkInitialFuel(true)
-    // if (!this.hasFuel) {
-    //   return
-    // }
+  tryUp = () => this.tryDirection(DIRECTIONS.Up);
 
+  dig = () => {
     if (!this.attemptRefuel()) {
       print('Out of fuel.')
       return
     }
 
-    print('Excavating...')
+    print('Digging...')
 
-    let reseal = false
     let done = false
     let alternate = 0
 
     while (!done) {
       for (let widthMined = 0; widthMined < this.width; widthMined++) {
         for (let lengthMined = 0; lengthMined < this.length - 1; lengthMined++) {
-          print('length mined: ', lengthMined)
           if (!this.tryForwards()) {
             done = true
             break
@@ -462,29 +515,22 @@ class TurtleEngine {
           break
         }
 
-        print('width mined: ', widthMined)
         if (widthMined < (this.width - 1)) {
           if (((widthMined + 1) + alternate) % 2 === 0) {
-            print('turning left')
             this.turnLeft()
             if (!this.tryForwards()) {
               done = true
               break
             }
-            print('turning left again')
             this.turnLeft()
           } else {
-            print('turning right')
             this.turnRight()
             if (!this.tryForwards()) {
               done = true
               break
             }
-            print('turning right again')
             this.turnRight()
           }
-        } else {
-          print('Repositioning to go down...')
         }
       }
 
@@ -514,24 +560,98 @@ class TurtleEngine {
         break
       }
     }
-  }
+  };
+
+  tunnel = () => {
+    if (!this.attemptRefuel()) {
+      print('Out of fuel.')
+      return
+    }
+
+    print('Tunneling...')
+
+    let done = false
+    let alternate = 0
+    let isMiningUp = true
+
+    if (!this.tryForwards()) {
+      return
+    }
+
+    this.turnRight()
+
+    for (let lengthMined = 0; lengthMined < this.length; lengthMined++) {
+      for (let widthMined = 0; widthMined < this.width; widthMined++) {
+        for (let heightMined = 0; heightMined < this.height - 1; heightMined++) {
+          let miningMethod = isMiningUp ? this.tryUp : this.tryDown
+          if (!miningMethod()) {
+            done = true
+            break
+          }
+        }
+
+        isMiningUp = !isMiningUp
+
+        if (widthMined < this.width - 1) {
+          if (!this.tryForwards()) {
+            done = true
+            break
+          }
+        }
+      }
+
+      if (lengthMined < this.length - 1) {
+        // Face forwards
+        const turnDirection = alternate === 0 ? this.turnLeft : this.turnRight
+        turnDirection()
+        if (!this.tryForwards()) {
+          done = true
+          break
+        }
+        turnDirection()
+        alternate = 1 - alternate
+      }
+    }
+
+    print('Job complete, returning.')
+    this.returnSupplies(false)
+  };
+
+  public runSelectedProgram = () => {
+    switch(this.selectedProgram) {
+      case PROGRAMS.DIG: {
+        this.length = parseInt(this.cliArguments[1], 10)
+        this.width = parseInt(this.cliArguments[2], 10)
+
+        this.dig()
+        return
+      }
+      case PROGRAMS.TUNNEL: {
+        this.width = parseInt(this.cliArguments[1], 10)
+        this.height = parseInt(this.cliArguments[2], 10)
+        this.length = parseInt(this.cliArguments[3], 10)
+
+        this.tunnel()
+        return
+      }
+      default: {
+        return
+      }
+    }
+  };
 }
 
 function main(...args) {
   print("\nExcavator Pro by MeguminGG")
   print("https://github.com/carl-eis")
   print("------------------------------------")
-  print("Excavation initiated, please monitor occasionally.")
 
-  if (!validateArgs(...args)) {
+  const TurtleInstance = new TurtleEngine(...args)
+  if (!TurtleInstance.validateArgs()) {
     return
   }
 
-  const length = args[0]
-  const width = args[1]
-
-  const TurtleInstance = new TurtleEngine(length, width)
-  TurtleInstance.start()
+  TurtleInstance.runSelectedProgram()
 }
 
 main(...$vararg)
