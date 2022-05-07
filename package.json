@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tstl",
-    "watch": "nodemon --exec \"npm run build && node lib/index.js\" -e js --ignore lib/ || exit 1"
+    "watch": "nodemon --exec \"npm run build || exit 1 && node lib/index.js\" -e ts"
   },
   "devDependencies": {
     "@jackmacwindows/lua-types": "^2.11.0",
