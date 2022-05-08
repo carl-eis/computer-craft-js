@@ -21,9 +21,30 @@ enum DIRECTIONS {
 }
 
 enum PROGRAMS {
-  DIG = 'dig',
+  MINE = 'mine',
   TUNNEL = 'tunnel',
   FLOOR = 'floor'
+}
+
+const PROGRAM_DESCRIPTIONS = {
+  [PROGRAMS.MINE]: {
+    usage: 'mine <length> <width>',
+    amountArguments: [3],
+    description: 'Mine directly down to bedrock in a cuboid shape',
+    shortDescription: 'quarry (downwards)'
+  },
+  [PROGRAMS.TUNNEL]: {
+    usage: 'tunnel <width> <height> <length>',
+    amountArguments: [4],
+    description: 'Tunnel forward in the specified cuboid shape',
+    shortDescription: 'dig forwards'
+  },
+  [PROGRAMS.FLOOR]: {
+    usage: 'floor <width> <length> <shift?>',
+    amountArguments: [3,4],
+    description: 'Place object used as floor in slot 2. Builds a floor.',
+    shortDescription: 'build a floor'
+  },
 }
 
 /* =================== Helpers ===================*/
@@ -164,61 +185,39 @@ class TurtleEngine {
 
   validateArgs = () => {
     const programName: PROGRAMS = this.cliArguments[0] as PROGRAMS
-    const possiblePrograms = [
-      PROGRAMS.DIG,
-      PROGRAMS.TUNNEL,
-      PROGRAMS.FLOOR
-    ]
+    const possiblePrograms = Object.keys(PROGRAM_DESCRIPTIONS)
 
     const printHelp = () => {
-      print('Please specify program name with arguments.\n')
-      print('Usage:')
-      print('dig <length> <width>')
-      print('floor <width> <length> <shift?>')
-      print('tunnel <width> <height> <length>')
+      print('Please choose a program.\n')
+      Object.keys(PROGRAM_DESCRIPTIONS).forEach((key) => {
+        const { shortDescription } = PROGRAM_DESCRIPTIONS[key]
+        print(`${key} - ${shortDescription}`)
+      })
     }
 
     if (!possiblePrograms.includes(programName)) {
+      term.clear()
       printHelp()
       return false
     }
 
-    switch(programName) {
-      case PROGRAMS.DIG: {
-        if (this.cliArguments.length === 3) {
-          this.selectedProgram = PROGRAMS.DIG
-          return true
-        } else {
-          print('Usage:')
-          print('dig <length> <width>')
-          return false
-        }
-      }
-      case PROGRAMS.TUNNEL: {
-        if (this.cliArguments.length === 4) {
-          this.selectedProgram = PROGRAMS.TUNNEL
-          return true
-        } else {
-          print('Usage:')
-          print('tunnel <width> <height> <length>')
-          return false
-        }
-      }
-      case PROGRAMS.FLOOR: {
-        if ([3,4].includes(this.cliArguments.length)) {
-          this.selectedProgram = PROGRAMS.FLOOR
-          return true
-        } else {
-          print('Usage:')
-          print('floor <width> <length> <shift?>')
-          return false
-        }
-      }
-      default: {
-        printHelp()
-        return false
-      }
+    const selectedDescription = PROGRAM_DESCRIPTIONS[programName]
+    if (!selectedDescription) {
+      term.clear()
+      printHelp()
+      return false
     }
+
+    if (!selectedDescription.amountArguments.includes(this.cliArguments.length)) {
+      term.clear()
+      print('Usage:')
+      print('- ' + selectedDescription.usage)
+      print(`\n${selectedDescription.description}`)
+      return false
+    }
+
+    this.selectedProgram = programName
+    return true
   }
 
   logPosition = () => {
@@ -679,6 +678,10 @@ class TurtleEngine {
     if (turtle.getItemCount(2) > 0) {
       const { name } = (turtle.getItemDetail(2) as any)
       selectedFloorType = name
+    } else {
+      print('Please place a building material in block 2!')
+      done = true
+      return
     }
 
     print(`Selected floor type: ${selectedFloorType}`)
@@ -785,7 +788,7 @@ class TurtleEngine {
 
   public runSelectedProgram = () => {
     switch(this.selectedProgram) {
-      case PROGRAMS.DIG: {
+      case PROGRAMS.MINE: {
         this.length = parseInt(this.cliArguments[1], 10)
         this.width = parseInt(this.cliArguments[2], 10)
 
