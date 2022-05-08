@@ -10,6 +10,10 @@ const FUEL_TYPES = {
   LOG: 'minecraft:log'
 }
 
+const FLOOR_TYPES = {
+  COBBLESTONE: 'minecraft:cobblestone'
+}
+
 const INVENTORY_SIZE = 16
 
 const FUEL_BUFFER_AMOUNT = 2
@@ -22,7 +26,8 @@ enum DIRECTIONS {
 
 enum PROGRAMS {
   DIG = 'dig',
-  TUNNEL = 'tunnel'
+  TUNNEL = 'tunnel',
+  FLOOR = 'floor'
 }
 
 /* =================== Helpers ===================*/
@@ -50,6 +55,21 @@ function checkFuelExists() {
   }
 
   return hasFuel
+}
+
+function getSlotContainingItems(itemList: string[] = Object.values(FLOOR_TYPES)): number {
+  for (let i = 0; i < (INVENTORY_SIZE); i++) {
+    if (turtle.getItemCount(i+1) > 0) {
+      const data = turtle.getItemDetail(i+1)
+      const { name } = data as any
+
+      if (itemList.includes(name)) {
+        return i + 1
+      }
+    }
+  }
+
+  return -1
 }
 
 function refillFromAllSlots(fuelRequiredToReturn: number): boolean {
@@ -127,13 +147,15 @@ class TurtleEngine {
     const programName: PROGRAMS = this.cliArguments[0] as PROGRAMS
     const possiblePrograms = [
       PROGRAMS.DIG,
-      PROGRAMS.TUNNEL
+      PROGRAMS.TUNNEL,
+      PROGRAMS.FLOOR
     ]
 
     const printHelp = () => {
-      print('Please specify program name with arguments.')
+      print('Please specify program name with arguments.\n')
       print('Usage:')
       print('dig <length> <width>')
+      print('floor <length> <width>')
       print('tunnel <width> <height> <length>')
     }
 
@@ -160,6 +182,16 @@ class TurtleEngine {
         } else {
           print('Usage:')
           print('tunnel <width> <height> <length>')
+          return false
+        }
+      }
+      case PROGRAMS.FLOOR: {
+        if (this.cliArguments.length === 3) {
+          this.selectedProgram = PROGRAMS.FLOOR
+          return true
+        } else {
+          print('Usage:')
+          print('floor <length> <width>')
           return false
         }
       }
@@ -385,17 +417,17 @@ class TurtleEngine {
     this.zDirection = -prevXDirection
   }
 
+  collectOrReturn = () => {
+    if (!this.tryCollect()) {
+      print('\nUnable to collect, returning back to base.')
+      this.returnSupplies()
+    }
+  }
+
   tryDirection = (direction: DIRECTIONS): boolean => {
     if (!this.attemptRefuel()) {
       print('\nOut of fuel. Returning to surface')
       this.returnSupplies()
-    }
-
-    const collectOrReturn = () => {
-      if (!this.tryCollect()) {
-        print('\nUnable to collect, returning back to base.')
-        this.returnSupplies()
-      }
     }
 
     // if (this.amountMoves >= this.maxMoves) {
@@ -444,13 +476,13 @@ class TurtleEngine {
     while (!move()) {
       if (detect()) {
         if (dig()) {
-          collectOrReturn()
+          this.collectOrReturn()
         } else {
           print('Unable to dig. Possibly stuck')
           return false
         }
       } else if (attack()) {
-        collectOrReturn()
+        this.collectOrReturn()
       } else {
         sleep(0.1)
       }
@@ -617,6 +649,83 @@ class TurtleEngine {
     this.returnSupplies(false)
   };
 
+  floor = () => {
+    if (!this.attemptRefuel()) {
+      print('Out of fuel.')
+      return
+    }
+
+    const itemSlot = getSlotContainingItems([FLOOR_TYPES.COBBLESTONE])
+    if (itemSlot === -1) {
+      print('No floor items found!')
+      return
+    }
+
+    turtle.select(itemSlot)
+    this.tryForwards()
+    turtle.turnRight()
+
+    const placeFloor = (): boolean => {
+      if (!turtle.placeDown()) {
+        if (turtle.detectDown()) {
+          // Blocks are the same, no need to place
+          if (turtle.compareDown()) {
+            return
+          }
+
+          // Blocks are different, dig first
+          if (turtle.digDown()) {
+            this.collectOrReturn()
+          } else {
+            print('Unable to dig. Possibly stuck')
+            return false
+          }
+        } else if (turtle.attackDown()) {
+          this.collectOrReturn()
+        } else {
+          sleep(0.1)
+        }
+
+        const itemSlot = getSlotContainingItems([FLOOR_TYPES.COBBLESTONE])
+        if (itemSlot === -1) {
+          // TODO: Go back to base if no floor left
+          return false
+        }
+
+        turtle.select(itemSlot)
+        if (!turtle.placeDown()) {
+          return false
+        }
+      }
+    }
+
+    let lengthMoved = 0
+    let alternate = 0
+
+    while (lengthMoved < this.length - 1) {
+      for (let j = 0; j < this.width - 1; j++) {
+        placeFloor()
+        this.tryForwards()
+      }
+
+      let turn = alternate === 1 ? this.turnRight : this.turnLeft
+
+      turn()
+      placeFloor()
+      if (!this.tryForwards()) {
+        break
+      }
+      placeFloor()
+      turn()
+
+      alternate = 1 - alternate
+      lengthMoved++
+    }
+
+    print('Job complete, returning.')
+    this.returnSupplies(false)
+  }
+
   public runSelectedProgram = () => {
     switch(this.selectedProgram) {
       case PROGRAMS.DIG: {
@@ -632,6 +741,13 @@ class TurtleEngine {
         this.length = parseInt(this.cliArguments[3], 10)
 
         this.tunnel()
+        return
+      }
+      case PROGRAMS.FLOOR: {
+        this.length = parseInt(this.cliArguments[1], 10)
+        this.width = parseInt(this.cliArguments[2], 10)
+
+        this.floor()
         return
       }
       default: {

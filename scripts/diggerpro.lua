@@ -863,6 +863,7 @@ ____modules = {
         local event = require("event")
         local sleep = os.sleep
         local FUEL_TYPES = {LAVA_BUCKET = "minecraft:lava_bucket", COAL = "minecraft:coal", CHARCOAL = "minecraft:charcoal", LOG = "minecraft:log"}
+        local FLOOR_TYPES = {COBBLESTONE = "minecraft:cobblestone"}
         local INVENTORY_SIZE = 16
         local FUEL_BUFFER_AMOUNT = 2
         local DIRECTIONS = DIRECTIONS or ({})
@@ -872,6 +873,7 @@ ____modules = {
         local PROGRAMS = PROGRAMS or ({})
         PROGRAMS.DIG = "dig"
         PROGRAMS.TUNNEL = "tunnel"
+        PROGRAMS.FLOOR = "floor"
         local function isFuel(self, index)
             if turtle.getItemCount(index) == 0 then
                 return false
@@ -898,6 +900,26 @@ ____modules = {
                 end
             end
             return hasFuel
+        end
+        local function getSlotContainingItems(self, itemList)
+            if itemList == nil then
+                itemList = __TS__ObjectValues(FLOOR_TYPES)
+            end
+            do
+                local i = 0
+                while i < INVENTORY_SIZE do
+                    if turtle.getItemCount(i + 1) > 0 then
+                        local data = turtle.getItemDetail(i + 1)
+                        local ____temp_1 = data
+                        local name = ____temp_1.name
+                        if __TS__ArrayIncludes(itemList, name) then
+                            return i + 1
+                        end
+                    end
+                    i = i + 1
+                end
+            end
+            return -1
         end
         local function refillFromAllSlots(self, fuelRequiredToReturn)
             local fueled = false
@@ -937,11 +959,12 @@ ____modules = {
             self.maxMoves = 50
             self.validateArgs = function()
                 local programName = self.cliArguments[1]
-                local possiblePrograms = {PROGRAMS.DIG, PROGRAMS.TUNNEL}
+                local possiblePrograms = {PROGRAMS.DIG, PROGRAMS.TUNNEL, PROGRAMS.FLOOR}
                 local function printHelp()
-                    print("Please specify program name with arguments.")
+                    print("Please specify program name with arguments.\n")
                     print("Usage:")
                     print("dig <length> <width>")
+                    print("floor <length> <width>")
                     print("tunnel <width> <height> <length>")
                 end
                 if not __TS__ArrayIncludes(possiblePrograms, programName) then
@@ -949,9 +972,9 @@ ____modules = {
                     return false
                 end
                 repeat
-                    local ____switch17 = programName
-                    local ____cond17 = ____switch17 == PROGRAMS.DIG
-                    if ____cond17 then
+                    local ____switch21 = programName
+                    local ____cond21 = ____switch21 == PROGRAMS.DIG
+                    if ____cond21 then
                         do
                             if #self.cliArguments == 3 then
                                 self.selectedProgram = PROGRAMS.DIG
@@ -963,8 +986,8 @@ ____modules = {
                             end
                         end
                     end
-                    ____cond17 = ____cond17 or ____switch17 == PROGRAMS.TUNNEL
-                    if ____cond17 then
+                    ____cond21 = ____cond21 or ____switch21 == PROGRAMS.TUNNEL
+                    if ____cond21 then
                         do
                             if #self.cliArguments == 4 then
                                 self.selectedProgram = PROGRAMS.TUNNEL
@@ -972,6 +995,19 @@ ____modules = {
                             else
                                 print("Usage:")
                                 print("tunnel <width> <height> <length>")
+                                return false
+                            end
+                        end
+                    end
+                    ____cond21 = ____cond21 or ____switch21 == PROGRAMS.FLOOR
+                    if ____cond21 then
+                        do
+                            if #self.cliArguments == 3 then
+                                self.selectedProgram = PROGRAMS.FLOOR
+                                return true
+                            else
+                                print("Usage:")
+                                print("floor <length> <width>")
                                 return false
                             end
                         end
@@ -1035,12 +1071,12 @@ ____modules = {
                 if resume == nil then
                     resume = true
                 end
-                local ____temp_1 = self
-                local xPos = ____temp_1.xPos
-                local yPos = ____temp_1.yPos
-                local zPos = ____temp_1.zPos
-                local xDirection = ____temp_1.xDirection
-                local zDirection = ____temp_1.zDirection
+                local ____temp_2 = self
+                local xPos = ____temp_2.xPos
+                local yPos = ____temp_2.yPos
+                local zPos = ____temp_2.zPos
+                local xDirection = ____temp_2.xDirection
+                local zDirection = ____temp_2.zDirection
                 print("Returning to surface...")
                 self:goTo(
                         0,
@@ -1179,25 +1215,25 @@ ____modules = {
                     self:turnLeft()
                 end
             end
+            self.collectOrReturn = function()
+                if not self:tryCollect() then
+                    print("\nUnable to collect, returning back to base.")
+                    self:returnSupplies()
+                end
+            end
             self.tryDirection = function(____, direction)
                 if not self:attemptRefuel() then
                     print("\nOut of fuel. Returning to surface")
                     self:returnSupplies()
-                end
-                local function collectOrReturn()
-                    if not self:tryCollect() then
-                        print("\nUnable to collect, returning back to base.")
-                        self:returnSupplies()
-                    end
                 end
                 local move
                 local detect
                 local dig
                 local attack
                 repeat
-                    local ____switch84 = direction
-                    local ____cond84 = ____switch84 == DIRECTIONS.Forwards
-                    if ____cond84 then
+                    local ____switch91 = direction
+                    local ____cond91 = ____switch91 == DIRECTIONS.Forwards
+                    if ____cond91 then
                         do
                             move = turtle.forward
                             detect = turtle.detect
@@ -1206,8 +1242,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond84 = ____cond84 or ____switch84 == DIRECTIONS.Down
-                    if ____cond84 then
+                    ____cond91 = ____cond91 or ____switch91 == DIRECTIONS.Down
+                    if ____cond91 then
                         do
                             move = turtle.down
                             detect = turtle.detectDown
@@ -1216,8 +1252,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond84 = ____cond84 or ____switch84 == DIRECTIONS.Up
-                    if ____cond84 then
+                    ____cond91 = ____cond91 or ____switch91 == DIRECTIONS.Up
+                    if ____cond91 then
                         do
                             move = turtle.up
                             detect = turtle.detectUp
@@ -1235,21 +1271,21 @@ ____modules = {
                 while not move(nil) do
                     if detect(nil) then
                         if dig(nil) then
-                            collectOrReturn(nil)
+                            self:collectOrReturn()
                         else
                             print("Unable to dig. Possibly stuck")
                             return false
                         end
                     elseif attack(nil) then
-                        collectOrReturn(nil)
+                        self:collectOrReturn()
                     else
                         sleep(0.1)
                     end
                 end
                 repeat
-                    local ____switch95 = direction
-                    local ____cond95 = ____switch95 == DIRECTIONS.Forwards
-                    if ____cond95 then
+                    local ____switch102 = direction
+                    local ____cond102 = ____switch102 == DIRECTIONS.Forwards
+                    if ____cond102 then
                         do
                             self.xPos = self.xPos + self.xDirection
                             self.zPos = self.zPos + self.zDirection
@@ -1257,8 +1293,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond95 = ____cond95 or ____switch95 == DIRECTIONS.Down
-                    if ____cond95 then
+                    ____cond102 = ____cond102 or ____switch102 == DIRECTIONS.Down
+                    if ____cond102 then
                         do
                             self.yPos = self.yPos + 1
                             if self.yPos % 10 == 0 then
@@ -1268,8 +1304,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond95 = ____cond95 or ____switch95 == DIRECTIONS.Up
-                    if ____cond95 then
+                    ____cond102 = ____cond102 or ____switch102 == DIRECTIONS.Up
+                    if ____cond102 then
                         do
                             self.yPos = self.yPos - 1
                             self.amountMoves = self.amountMoves + 1
@@ -1375,13 +1411,13 @@ ____modules = {
                                 do
                                     local heightMined = 0
                                     while heightMined < self.height - 1 do
-                                        local ____isMiningUp_2
+                                        local ____isMiningUp_3
                                         if isMiningUp then
-                                            ____isMiningUp_2 = self.tryUp
+                                            ____isMiningUp_3 = self.tryUp
                                         else
-                                            ____isMiningUp_2 = self.tryDown
+                                            ____isMiningUp_3 = self.tryDown
                                         end
-                                        local miningMethod = ____isMiningUp_2
+                                        local miningMethod = ____isMiningUp_3
                                         if not miningMethod(nil) then
                                             done = true
                                             break
@@ -1400,13 +1436,13 @@ ____modules = {
                             end
                         end
                         if lengthMined < self.length - 1 then
-                            local ____temp_3
+                            local ____temp_4
                             if alternate == 0 then
-                                ____temp_3 = self.turnLeft
+                                ____temp_4 = self.turnLeft
                             else
-                                ____temp_3 = self.turnRight
+                                ____temp_4 = self.turnRight
                             end
-                            local turnDirection = ____temp_3
+                            local turnDirection = ____temp_4
                             turnDirection(nil)
                             if not self:tryForwards() then
                                 done = true
@@ -1421,11 +1457,82 @@ ____modules = {
                 print("Job complete, returning.")
                 self:returnSupplies(false)
             end
+            self.floor = function()
+                if not self:attemptRefuel() then
+                    print("Out of fuel.")
+                    return
+                end
+                local itemSlot = getSlotContainingItems(nil, {FLOOR_TYPES.COBBLESTONE})
+                if itemSlot == -1 then
+                    print("No floor items found!")
+                    return
+                end
+                turtle.select(itemSlot)
+                self:tryForwards()
+                turtle.turnRight()
+                local function placeFloor()
+                    if not turtle.placeDown() then
+                        if turtle.detectDown() then
+                            if turtle.compareDown() then
+                                return
+                            end
+                            if turtle.digDown() then
+                                self:collectOrReturn()
+                            else
+                                print("Unable to dig. Possibly stuck")
+                                return false
+                            end
+                        elseif turtle.attackDown() then
+                            self:collectOrReturn()
+                        else
+                            sleep(0.1)
+                        end
+                        local itemSlot = getSlotContainingItems(nil, {FLOOR_TYPES.COBBLESTONE})
+                        if itemSlot == -1 then
+                            return false
+                        end
+                        turtle.select(itemSlot)
+                        if not turtle.placeDown() then
+                            return false
+                        end
+                    end
+                end
+                local lengthMoved = 0
+                local alternate = 0
+                while lengthMoved < self.length - 1 do
+                    do
+                        local j = 0
+                        while j < self.width - 1 do
+                            placeFloor(nil)
+                            self:tryForwards()
+                            j = j + 1
+                        end
+                    end
+                    local ____temp_5
+                    if alternate == 1 then
+                        ____temp_5 = self.turnRight
+                    else
+                        ____temp_5 = self.turnLeft
+                    end
+                    local turn = ____temp_5
+                    turn(nil)
+                    placeFloor(nil)
+                    if not self:tryForwards() then
+                        break
+                    end
+                    placeFloor(nil)
+                    turn(nil)
+                    alternate = 1 - alternate
+                    lengthMoved = lengthMoved + 1
+                end
+                print("Job complete, returning.")
+                self:returnSupplies(false)
+            end
             self.runSelectedProgram = function()
                 repeat
-                    local ____switch135 = self.selectedProgram
-                    local ____cond135 = ____switch135 == PROGRAMS.DIG
-                    if ____cond135 then
+                    local ____switch158 = self.selectedProgram
+                    local ____cond158 = ____switch158 == PROGRAMS.DIG
+                    if ____cond158 then
                         do
                             self.length = __TS__ParseInt(self.cliArguments[2], 10)
                             self.width = __TS__ParseInt(self.cliArguments[3], 10)
@@ -1433,13 +1540,22 @@ ____modules = {
                             return
                         end
                     end
-                    ____cond135 = ____cond135 or ____switch135 == PROGRAMS.TUNNEL
-                    if ____cond135 then
+                    ____cond158 = ____cond158 or ____switch158 == PROGRAMS.TUNNEL
+                    if ____cond158 then
                         do
                             self.width = __TS__ParseInt(self.cliArguments[2], 10)
                             self.height = __TS__ParseInt(self.cliArguments[3], 10)
                             self.length = __TS__ParseInt(self.cliArguments[4], 10)
                             self:tunnel()
+                            return
+                        end
+                    end
+                    ____cond158 = ____cond158 or ____switch158 == PROGRAMS.FLOOR
+                    if ____cond158 then
+                        do
+                            self.length = __TS__ParseInt(self.cliArguments[2], 10)
+                            self.width = __TS__ParseInt(self.cliArguments[3], 10)
+                            self:floor()
                             return
                         end
                     end
