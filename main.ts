@@ -32,6 +32,29 @@ enum PROGRAMS {
 
 /* =================== Helpers ===================*/
 
+function getDirection(xDir: number, zDir: number): string {
+  // North  0,1
+  // East   1,0
+  // South  0,-1
+  // West   -1,0
+  if (xDir === 0) {
+    if (zDir === 1) {
+      return 'NORTH'
+    } else if (zDir === 0) {
+      return 'SOUTH'
+    }
+  }
+  if (xDir === 1) {
+    if (zDir === 0) {
+      return 'EAST'
+    } else if (zDir === 1) {
+      return 'WEST'
+    }
+  }
+
+  return 'UNKNOWN'
+}
+
 function isFuel(index: number): boolean {
   if (turtle.getItemCount(index) === 0) {
     return false
@@ -155,7 +178,7 @@ class TurtleEngine {
       print('Please specify program name with arguments.\n')
       print('Usage:')
       print('dig <length> <width>')
-      print('floor <length> <width>')
+      print('floor <width> <length> <shift?>')
       print('tunnel <width> <height> <length>')
     }
 
@@ -186,12 +209,12 @@ class TurtleEngine {
         }
       }
       case PROGRAMS.FLOOR: {
-        if (this.cliArguments.length === 3) {
+        if ([3,4].includes(this.cliArguments.length)) {
           this.selectedProgram = PROGRAMS.FLOOR
           return true
         } else {
           print('Usage:')
-          print('floor <length> <width>')
+          print('floor <width> <length> <shift?>')
           return false
         }
       }
@@ -200,6 +223,10 @@ class TurtleEngine {
         return false
       }
     }
+  }
+
+  logPosition = () => {
+    print(`${this.xPos}x ${this.yPos}y ${this.zPos}z facing ${getDirection(this.xDirection, this.zDirection)}`)
   }
 
   /**
@@ -649,7 +676,7 @@ class TurtleEngine {
     this.returnSupplies(false)
   };
 
-  floor = () => {
+  floor = (shiftOne = false) => {
     if (!this.attemptRefuel()) {
       print('Out of fuel.')
       return
@@ -662,8 +689,12 @@ class TurtleEngine {
     }
 
     turtle.select(itemSlot)
-    this.tryForwards()
-    turtle.turnRight()
+    // Move forward once block from starting position, if desired
+    if (shiftOne) {
+      this.tryForwards()
+    }
+
+    this.turnRight()
 
     const placeFloor = (): boolean => {
       if (!turtle.placeDown()) {
@@ -702,27 +733,34 @@ class TurtleEngine {
     let lengthMoved = 0
     let alternate = 0
 
-    while (lengthMoved < this.length - 1) {
-      for (let j = 0; j < this.width - 1; j++) {
+    while (lengthMoved < this.length) {
+      let j = 0;
+      while (j < this.width - 1) {
         placeFloor()
         this.tryForwards()
+        j++
       }
 
       let turn = alternate === 1 ? this.turnRight : this.turnLeft
 
       turn()
       placeFloor()
-      if (!this.tryForwards()) {
-        break
+
+      if (lengthMoved < this.length - 1) {
+        if (!this.tryForwards()) {
+          break
+        }
+        placeFloor()
+        turn()
       }
-      placeFloor()
-      turn()
 
       alternate = 1 - alternate
       lengthMoved++
     }
 
     print('Job complete, returning.')
+    this.logPosition()
+
     this.returnSupplies(false)
   }
 
@@ -744,10 +782,11 @@ class TurtleEngine {
         return
       }
       case PROGRAMS.FLOOR: {
-        this.length = parseInt(this.cliArguments[1], 10)
-        this.width = parseInt(this.cliArguments[2], 10)
+        this.width = parseInt(this.cliArguments[1], 10)
+        this.length = parseInt(this.cliArguments[2], 10)
+        const shiftOne = (this.cliArguments[3] === 'true')
 
-        this.floor()
+        this.floor(shiftOne)
         return
       }
       default: {

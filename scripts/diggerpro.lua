@@ -874,6 +874,23 @@ ____modules = {
         PROGRAMS.DIG = "dig"
         PROGRAMS.TUNNEL = "tunnel"
         PROGRAMS.FLOOR = "floor"
+        local function getDirection(self, xDir, zDir)
+            if xDir == 0 then
+                if zDir == 1 then
+                    return "NORTH"
+                elseif zDir == 0 then
+                    return "SOUTH"
+                end
+            end
+            if xDir == 1 then
+                if zDir == 0 then
+                    return "EAST"
+                elseif zDir == 1 then
+                    return "WEST"
+                end
+            end
+            return "UNKNOWN"
+        end
         local function isFuel(self, index)
             if turtle.getItemCount(index) == 0 then
                 return false
@@ -964,7 +981,7 @@ ____modules = {
                     print("Please specify program name with arguments.\n")
                     print("Usage:")
                     print("dig <length> <width>")
-                    print("floor <length> <width>")
+                    print("floor <width> <length> <shift?>")
                     print("tunnel <width> <height> <length>")
                 end
                 if not __TS__ArrayIncludes(possiblePrograms, programName) then
@@ -972,9 +989,9 @@ ____modules = {
                     return false
                 end
                 repeat
-                    local ____switch21 = programName
-                    local ____cond21 = ____switch21 == PROGRAMS.DIG
-                    if ____cond21 then
+                    local ____switch28 = programName
+                    local ____cond28 = ____switch28 == PROGRAMS.DIG
+                    if ____cond28 then
                         do
                             if #self.cliArguments == 3 then
                                 self.selectedProgram = PROGRAMS.DIG
@@ -986,8 +1003,8 @@ ____modules = {
                             end
                         end
                     end
-                    ____cond21 = ____cond21 or ____switch21 == PROGRAMS.TUNNEL
-                    if ____cond21 then
+                    ____cond28 = ____cond28 or ____switch28 == PROGRAMS.TUNNEL
+                    if ____cond28 then
                         do
                             if #self.cliArguments == 4 then
                                 self.selectedProgram = PROGRAMS.TUNNEL
@@ -999,15 +1016,15 @@ ____modules = {
                             end
                         end
                     end
-                    ____cond21 = ____cond21 or ____switch21 == PROGRAMS.FLOOR
-                    if ____cond21 then
+                    ____cond28 = ____cond28 or ____switch28 == PROGRAMS.FLOOR
+                    if ____cond28 then
                         do
-                            if #self.cliArguments == 3 then
+                            if __TS__ArrayIncludes({3, 4}, #self.cliArguments) then
                                 self.selectedProgram = PROGRAMS.FLOOR
                                 return true
                             else
                                 print("Usage:")
-                                print("floor <length> <width>")
+                                print("floor <width> <length> <shift?>")
                                 return false
                             end
                         end
@@ -1019,6 +1036,9 @@ ____modules = {
                         end
                     end
                 until true
+            end
+            self.logPosition = function()
+                print((((((tostring(self.xPos) .. "x ") .. tostring(self.yPos)) .. "y ") .. tostring(self.zPos)) .. "z facing ") .. getDirection(nil, self.xDirection, self.zDirection))
             end
             self.attemptRefuel = function(____, manualAmount)
                 local fuelLevel = turtle.getFuelLevel()
@@ -1231,9 +1251,9 @@ ____modules = {
                 local dig
                 local attack
                 repeat
-                    local ____switch91 = direction
-                    local ____cond91 = ____switch91 == DIRECTIONS.Forwards
-                    if ____cond91 then
+                    local ____switch99 = direction
+                    local ____cond99 = ____switch99 == DIRECTIONS.Forwards
+                    if ____cond99 then
                         do
                             move = turtle.forward
                             detect = turtle.detect
@@ -1242,8 +1262,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond91 = ____cond91 or ____switch91 == DIRECTIONS.Down
-                    if ____cond91 then
+                    ____cond99 = ____cond99 or ____switch99 == DIRECTIONS.Down
+                    if ____cond99 then
                         do
                             move = turtle.down
                             detect = turtle.detectDown
@@ -1252,8 +1272,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond91 = ____cond91 or ____switch91 == DIRECTIONS.Up
-                    if ____cond91 then
+                    ____cond99 = ____cond99 or ____switch99 == DIRECTIONS.Up
+                    if ____cond99 then
                         do
                             move = turtle.up
                             detect = turtle.detectUp
@@ -1283,9 +1303,9 @@ ____modules = {
                     end
                 end
                 repeat
-                    local ____switch102 = direction
-                    local ____cond102 = ____switch102 == DIRECTIONS.Forwards
-                    if ____cond102 then
+                    local ____switch110 = direction
+                    local ____cond110 = ____switch110 == DIRECTIONS.Forwards
+                    if ____cond110 then
                         do
                             self.xPos = self.xPos + self.xDirection
                             self.zPos = self.zPos + self.zDirection
@@ -1293,8 +1313,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond102 = ____cond102 or ____switch102 == DIRECTIONS.Down
-                    if ____cond102 then
+                    ____cond110 = ____cond110 or ____switch110 == DIRECTIONS.Down
+                    if ____cond110 then
                         do
                             self.yPos = self.yPos + 1
                             if self.yPos % 10 == 0 then
@@ -1304,8 +1324,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond102 = ____cond102 or ____switch102 == DIRECTIONS.Up
-                    if ____cond102 then
+                    ____cond110 = ____cond110 or ____switch110 == DIRECTIONS.Up
+                    if ____cond110 then
                         do
                             self.yPos = self.yPos - 1
                             self.amountMoves = self.amountMoves + 1
@@ -1457,7 +1477,10 @@ ____modules = {
                 print("Job complete, returning.")
                 self:returnSupplies(false)
             end
-            self.floor = function()
+            self.floor = function(____, shiftOne)
+                if shiftOne == nil then
+                    shiftOne = false
+                end
                 if not self:attemptRefuel() then
                     print("Out of fuel.")
                     return
@@ -1468,8 +1491,10 @@ ____modules = {
                     return
                 end
                 turtle.select(itemSlot)
-                self:tryForwards()
-                turtle.turnRight()
+                if shiftOne then
+                    self:tryForwards()
+                end
+                self:turnRight()
                 local function placeFloor()
                     if not turtle.placeDown() then
                         if turtle.detectDown() then
@@ -1499,14 +1524,12 @@ ____modules = {
                 end
                 local lengthMoved = 0
                 local alternate = 0
-                while lengthMoved < self.length - 1 do
-                    do
-                        local j = 0
-                        while j < self.width - 1 do
-                            placeFloor(nil)
-                            self:tryForwards()
-                            j = j + 1
-                        end
+                while lengthMoved < self.length do
+                    local j = 0
+                    while j < self.width - 1 do
+                        placeFloor(nil)
+                        self:tryForwards()
+                        j = j + 1
                     end
                     local ____temp_5
                     if alternate == 1 then
@@ -1517,22 +1540,25 @@ ____modules = {
                     local turn = ____temp_5
                     turn(nil)
                     placeFloor(nil)
-                    if not self:tryForwards() then
-                        break
+                    if lengthMoved < self.length - 1 then
+                        if not self:tryForwards() then
+                            break
+                        end
+                        placeFloor(nil)
+                        turn(nil)
                     end
-                    placeFloor(nil)
-                    turn(nil)
                     alternate = 1 - alternate
                     lengthMoved = lengthMoved + 1
                 end
                 print("Job complete, returning.")
+                self:logPosition()
                 self:returnSupplies(false)
             end
             self.runSelectedProgram = function()
                 repeat
-                    local ____switch158 = self.selectedProgram
-                    local ____cond158 = ____switch158 == PROGRAMS.DIG
-                    if ____cond158 then
+                    local ____switch168 = self.selectedProgram
+                    local ____cond168 = ____switch168 == PROGRAMS.DIG
+                    if ____cond168 then
                         do
                             self.length = __TS__ParseInt(self.cliArguments[2], 10)
                             self.width = __TS__ParseInt(self.cliArguments[3], 10)
@@ -1540,8 +1566,8 @@ ____modules = {
                             return
                         end
                     end
-                    ____cond158 = ____cond158 or ____switch158 == PROGRAMS.TUNNEL
-                    if ____cond158 then
+                    ____cond168 = ____cond168 or ____switch168 == PROGRAMS.TUNNEL
+                    if ____cond168 then
                         do
                             self.width = __TS__ParseInt(self.cliArguments[2], 10)
                             self.height = __TS__ParseInt(self.cliArguments[3], 10)
@@ -1550,12 +1576,13 @@ ____modules = {
                             return
                         end
                     end
-                    ____cond158 = ____cond158 or ____switch158 == PROGRAMS.FLOOR
-                    if ____cond158 then
+                    ____cond168 = ____cond168 or ____switch168 == PROGRAMS.FLOOR
+                    if ____cond168 then
                         do
-                            self.length = __TS__ParseInt(self.cliArguments[2], 10)
-                            self.width = __TS__ParseInt(self.cliArguments[3], 10)
-                            self:floor()
+                            self.width = __TS__ParseInt(self.cliArguments[2], 10)
+                            self.length = __TS__ParseInt(self.cliArguments[3], 10)
+                            local shiftOne = self.cliArguments[4] == "true"
+                            self:floor(shiftOne)
                             return
                         end
                     end
@@ -1601,6 +1628,23 @@ ____modules = {
         end
         main(nil, ...)
         return ____exports
+    end,
+    ["turtle-core"] = function(...)
+        --[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua ]]
+        -- Lua Library inline imports
+        local function __TS__Class(self)
+            local c = {prototype = {}}
+            c.prototype.__index = c.prototype
+            c.prototype.constructor = c
+            return c
+        end
+
+        TurtleCore = __TS__Class()
+        TurtleCore.name = "TurtleCore"
+        function TurtleCore.prototype.____constructor(self)
+        end
+        function TurtleCore.prototype.move(self, direction)
+        end
     end,
 }
 return require("main", ...)
