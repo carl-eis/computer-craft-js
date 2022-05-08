@@ -1379,14 +1379,9 @@ ____modules = {
                         break
                     end
                     if self.width > 1 then
-                        if self.width % 2 == 0 then
-                            self:turnRight()
-                        else
-                            if alternate == 0 then
-                                self:turnLeft()
-                            else
-                                self:turnRight()
-                            end
+                        self:turnRight()
+                        self:turnRight()
+                        if self.width % 2 ~= 0 then
                             alternate = 1 - alternate
                         end
                     end
@@ -1569,9 +1564,9 @@ ____modules = {
             end
             self.runSelectedProgram = function()
                 repeat
-                    local ____switch167 = self.selectedProgram
-                    local ____cond167 = ____switch167 == PROGRAMS.MINE
-                    if ____cond167 then
+                    local ____switch164 = self.selectedProgram
+                    local ____cond164 = ____switch164 == PROGRAMS.MINE
+                    if ____cond164 then
                         do
                             self.length = __TS__ParseInt(self.cliArguments[2], 10)
                             self.width = __TS__ParseInt(self.cliArguments[3], 10)
@@ -1579,8 +1574,8 @@ ____modules = {
                             return
                         end
                     end
-                    ____cond167 = ____cond167 or ____switch167 == PROGRAMS.TUNNEL
-                    if ____cond167 then
+                    ____cond164 = ____cond164 or ____switch164 == PROGRAMS.TUNNEL
+                    if ____cond164 then
                         do
                             self.width = __TS__ParseInt(self.cliArguments[2], 10)
                             self.height = __TS__ParseInt(self.cliArguments[3], 10)
@@ -1589,8 +1584,8 @@ ____modules = {
                             return
                         end
                     end
-                    ____cond167 = ____cond167 or ____switch167 == PROGRAMS.FLOOR
-                    if ____cond167 then
+                    ____cond164 = ____cond164 or ____switch164 == PROGRAMS.FLOOR
+                    if ____cond164 then
                         do
                             self.width = __TS__ParseInt(self.cliArguments[2], 10)
                             self.length = __TS__ParseInt(self.cliArguments[3], 10)
