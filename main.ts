@@ -595,18 +595,17 @@ class TurtleEngine {
       if (this.width > 1) {
         if (this.width % 2 === 0) {
           this.turnRight()
+          this.turnRight()
         } else {
           if (alternate === 0) {
             this.turnLeft()
-            // this.turnLeft()
-            // alternate = 1
+            this.turnLeft()
           } else {
             this.turnRight()
-            // this.turnRight()
+            this.turnRight()
           }
-          alternate = 1 - alternate
         }
-
+        alternate = 1 - alternate
       }
 
       if (!this.tryDown()) {
