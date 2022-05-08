@@ -1,3 +1,20 @@
+# ComputerCraft Scripts
+
+## Mining turtle scripts
+
+### Digger pro
+
+An "all-in-one" solution for repetitive tasks in minecraft. Supports mining, building floors 
+and digging long tunnels.
+
+In your Mining Turtle terminal, paste the following:
+
+    wget https://raw.githubusercontent.com/carl-eis/computer-craft-js/master/scripts/diggerpro.lua digger
+
+To use, just type `digger`
+
+----
+
 # cc-tstl-template
 Template project for ComputerCraft programs written in TypeScript. Uses [TypeScriptToLua](https://typescripttolua.github.io) to compile with ComputerCraft typing declarations.
 
