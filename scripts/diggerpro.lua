@@ -775,6 +775,24 @@ ____modules = {
             end
         end
 
+        local function __TS__ObjectKeys(obj)
+            local result = {}
+            for key in pairs(obj) do
+                result[#result + 1] = key
+            end
+            return result
+        end
+
+        local function __TS__ArrayForEach(arr, callbackFn)
+            do
+                local i = 0
+                while i < #arr do
+                    callbackFn(nil, arr[i + 1], i, arr)
+                    i = i + 1
+                end
+            end
+        end
+
         local function __TS__StringSubstr(self, from, length)
             if from ~= from then
                 from = 0
@@ -863,7 +881,6 @@ ____modules = {
         local event = require("event")
         local sleep = os.sleep
         local FUEL_TYPES = {LAVA_BUCKET = "minecraft:lava_bucket", COAL = "minecraft:coal", CHARCOAL = "minecraft:charcoal", LOG = "minecraft:log"}
-        local FLOOR_TYPES = {COBBLESTONE = "minecraft:cobblestone"}
         local INVENTORY_SIZE = 16
         local FUEL_BUFFER_AMOUNT = 2
         local DIRECTIONS = DIRECTIONS or ({})
@@ -871,9 +888,10 @@ ____modules = {
         DIRECTIONS.Forwards = "FORWARDS"
         DIRECTIONS.Up = "UP"
         local PROGRAMS = PROGRAMS or ({})
-        PROGRAMS.DIG = "dig"
+        PROGRAMS.MINE = "mine"
         PROGRAMS.TUNNEL = "tunnel"
         PROGRAMS.FLOOR = "floor"
+        local PROGRAM_DESCRIPTIONS = {[PROGRAMS.MINE] = {usage = "mine <length> <width>", amountArguments = {3}, description = "Mine directly down to bedrock in a cuboid shape", shortDescription = "quarry (downwards)"}, [PROGRAMS.TUNNEL] = {usage = "tunnel <width> <height> <length>", amountArguments = {4}, description = "Tunnel forward in the specified cuboid shape", shortDescription = "dig forwards"}, [PROGRAMS.FLOOR] = {usage = "floor <width> <length> <shift?>", amountArguments = {3, 4}, description = "Place object used as floor in slot 2. Builds a floor.", shortDescription = "build a floor"}}
         local function getDirection(self, xDir, zDir)
             if xDir == 0 then
                 if zDir == 1 then
@@ -918,10 +936,7 @@ ____modules = {
             end
             return hasFuel
         end
-        local function getSlotContainingItems(self, itemList)
-            if itemList == nil then
-                itemList = __TS__ObjectValues(FLOOR_TYPES)
-            end
+        local function getSlotContainingItem(self, floorItem)
             do
                 local i = 0
                 while i < INVENTORY_SIZE do
@@ -929,7 +944,7 @@ ____modules = {
                         local data = turtle.getItemDetail(i + 1)
                         local ____temp_1 = data
                         local name = ____temp_1.name
-                        if __TS__ArrayIncludes(itemList, name) then
+                        if floorItem == name then
                             return i + 1
                         end
                     end
@@ -976,66 +991,38 @@ ____modules = {
             self.maxMoves = 50
             self.validateArgs = function()
                 local programName = self.cliArguments[1]
-                local possiblePrograms = {PROGRAMS.DIG, PROGRAMS.TUNNEL, PROGRAMS.FLOOR}
+                local possiblePrograms = __TS__ObjectKeys(PROGRAM_DESCRIPTIONS)
                 local function printHelp()
-                    print("Please specify program name with arguments.\n")
-                    print("Usage:")
-                    print("dig <length> <width>")
-                    print("floor <width> <length> <shift?>")
-                    print("tunnel <width> <height> <length>")
+                    print("Please choose a program.\n")
+                    __TS__ArrayForEach(
+                            __TS__ObjectKeys(PROGRAM_DESCRIPTIONS),
+                            function(____, key)
+                                local ____PROGRAM_DESCRIPTIONS_key_2 = PROGRAM_DESCRIPTIONS[key]
+                                local shortDescription = ____PROGRAM_DESCRIPTIONS_key_2.shortDescription
+                                print((key .. " - ") .. tostring(shortDescription))
+                            end
+                    )
                 end
                 if not __TS__ArrayIncludes(possiblePrograms, programName) then
+                    term.clear()
                     printHelp(nil)
                     return false
                 end
-                repeat
-                    local ____switch28 = programName
-                    local ____cond28 = ____switch28 == PROGRAMS.DIG
-                    if ____cond28 then
-                        do
-                            if #self.cliArguments == 3 then
-                                self.selectedProgram = PROGRAMS.DIG
-                                return true
-                            else
-                                print("Usage:")
-                                print("dig <length> <width>")
-                                return false
-                            end
-                        end
-                    end
-                    ____cond28 = ____cond28 or ____switch28 == PROGRAMS.TUNNEL
-                    if ____cond28 then
-                        do
-                            if #self.cliArguments == 4 then
-                                self.selectedProgram = PROGRAMS.TUNNEL
-                                return true
-                            else
-                                print("Usage:")
-                                print("tunnel <width> <height> <length>")
-                                return false
-                            end
-                        end
-                    end
-                    ____cond28 = ____cond28 or ____switch28 == PROGRAMS.FLOOR
-                    if ____cond28 then
-                        do
-                            if __TS__ArrayIncludes({3, 4}, #self.cliArguments) then
-                                self.selectedProgram = PROGRAMS.FLOOR
-                                return true
-                            else
-                                print("Usage:")
-                                print("floor <width> <length> <shift?>")
-                                return false
-                            end
-                        end
-                    end
-                    do
-                        do
-                            printHelp(nil)
-                            return false
-                        end
-                    end
-                until true
+                local selectedDescription = PROGRAM_DESCRIPTIONS[programName]
+                if not selectedDescription then
+                    term.clear()
+                    printHelp(nil)
+                    return false
+                end
+                if not __TS__ArrayIncludes(selectedDescription.amountArguments, #self.cliArguments) then
+                    term.clear()
+                    print("Usage:")
+                    print("- " .. selectedDescription.usage)
+                    print("\n" .. selectedDescription.description)
+                    return false
+                end
+                self.selectedProgram = programName
+                return true
             end
             self.logPosition = function()
                 print((((((tostring(self.xPos) .. "x ") .. tostring(self.yPos)) .. "y ") .. tostring(self.zPos)) .. "z facing ") .. getDirection(nil, self.xDirection, self.zDirection))
@@ -1091,12 +1078,12 @@ ____modules = {
                 if resume == nil then
                     resume = true
                 end
-                local ____temp_2 = self
-                local xPos = ____temp_2.xPos
-                local yPos = ____temp_2.yPos
-                local zPos = ____temp_2.zPos
-                local xDirection = ____temp_2.xDirection
-                local zDirection = ____temp_2.zDirection
+                local ____temp_3 = self
+                local xPos = ____temp_3.xPos
+                local yPos = ____temp_3.yPos
+                local zPos = ____temp_3.zPos
+                local xDirection = ____temp_3.xDirection
+                local zDirection = ____temp_3.zDirection
                 print("Returning to surface...")
                 self:goTo(
                         0,
@@ -1251,9 +1238,9 @@ ____modules = {
                 local dig
                 local attack
                 repeat
-                    local ____switch99 = direction
-                    local ____cond99 = ____switch99 == DIRECTIONS.Forwards
-                    if ____cond99 then
+                    local ____switch91 = direction
+                    local ____cond91 = ____switch91 == DIRECTIONS.Forwards
+                    if ____cond91 then
                         do
                             move = turtle.forward
                             detect = turtle.detect
@@ -1262,8 +1249,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond99 = ____cond99 or ____switch99 == DIRECTIONS.Down
-                    if ____cond99 then
+                    ____cond91 = ____cond91 or ____switch91 == DIRECTIONS.Down
+                    if ____cond91 then
                         do
                             move = turtle.down
                             detect = turtle.detectDown
@@ -1272,8 +1259,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond99 = ____cond99 or ____switch99 == DIRECTIONS.Up
-                    if ____cond99 then
+                    ____cond91 = ____cond91 or ____switch91 == DIRECTIONS.Up
+                    if ____cond91 then
                         do
                             move = turtle.up
                             detect = turtle.detectUp
@@ -1303,9 +1290,9 @@ ____modules = {
                     end
                 end
                 repeat
-                    local ____switch110 = direction
-                    local ____cond110 = ____switch110 == DIRECTIONS.Forwards
-                    if ____cond110 then
+                    local ____switch102 = direction
+                    local ____cond102 = ____switch102 == DIRECTIONS.Forwards
+                    if ____cond102 then
                         do
                             self.xPos = self.xPos + self.xDirection
                             self.zPos = self.zPos + self.zDirection
@@ -1313,8 +1300,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond110 = ____cond110 or ____switch110 == DIRECTIONS.Down
-                    if ____cond110 then
+                    ____cond102 = ____cond102 or ____switch102 == DIRECTIONS.Down
+                    if ____cond102 then
                         do
                             self.yPos = self.yPos + 1
                             if self.yPos % 10 == 0 then
@@ -1324,8 +1311,8 @@ ____modules = {
                             break
                         end
                     end
-                    ____cond110 = ____cond110 or ____switch110 == DIRECTIONS.Up
-                    if ____cond110 then
+                    ____cond102 = ____cond102 or ____switch102 == DIRECTIONS.Up
+                    if ____cond102 then
                         do
                             self.yPos = self.yPos - 1
                             self.amountMoves = self.amountMoves + 1
@@ -1431,13 +1418,13 @@ ____modules = {
                                 do
                                     local heightMined = 0
                                     while heightMined < self.height - 1 do
-                                        local ____isMiningUp_3
+                                        local ____isMiningUp_4
                                         if isMiningUp then
-                                            ____isMiningUp_3 = self.tryUp
+                                            ____isMiningUp_4 = self.tryUp
                                         else
-                                            ____isMiningUp_3 = self.tryDown
+                                            ____isMiningUp_4 = self.tryDown
                                         end
-                                        local miningMethod = ____isMiningUp_3
+                                        local miningMethod = ____isMiningUp_4
                                         if not miningMethod(nil) then
                                             done = true
                                             break
@@ -1456,13 +1443,13 @@ ____modules = {
                             end
                         end
                         if lengthMined < self.length - 1 then
-                            local ____temp_4
+                            local ____temp_5
                             if alternate == 0 then
-                                ____temp_4 = self.turnLeft
+                                ____temp_5 = self.turnLeft
                             else
-                                ____temp_4 = self.turnRight
+                                ____temp_5 = self.turnRight
                             end
-                            local turnDirection = ____temp_4
+                            local turnDirection = ____temp_5
                             turnDirection(nil)
                             if not self:tryForwards() then
                                 done = true
@@ -1481,11 +1468,23 @@ ____modules = {
                 if shiftOne == nil then
                     shiftOne = false
                 end
+                local selectedFloorType
+                local done = false
+                if turtle.getItemCount(2) > 0 then
+                    local ____temp_6 = turtle.getItemDetail(2)
+                    local name = ____temp_6.name
+                    selectedFloorType = name
+                else
+                    print("Please place a building material in block 2!")
+                    done = true
+                    return
+                end
+                print("Selected floor type: " .. selectedFloorType)
                 if not self:attemptRefuel() then
                     print("Out of fuel.")
                     return
                 end
-                local itemSlot = getSlotContainingItems(nil, {FLOOR_TYPES.COBBLESTONE})
+                local itemSlot = getSlotContainingItem(nil, selectedFloorType)
                 if itemSlot == -1 then
                     print("No floor items found!")
                     return
@@ -1497,6 +1496,14 @@ ____modules = {
                 self:turnRight()
                 local function placeFloor()
                     if not turtle.placeDown() then
+                        local itemSlot = getSlotContainingItem(nil, selectedFloorType)
+                        if itemSlot == -1 then
+                            print("No building materials remaining!")
+                            done = true
+                            return
+                        else
+                            turtle.select(itemSlot)
+                        end
                         if turtle.detectDown() then
                             if turtle.compareDown() then
                                 return
@@ -1512,11 +1519,6 @@ ____modules = {
                         else
                             sleep(0.1)
                         end
-                        local itemSlot = getSlotContainingItems(nil, {FLOOR_TYPES.COBBLESTONE})
-                        if itemSlot == -1 then
-                            return false
-                        end
-                        turtle.select(itemSlot)
                         if not turtle.placeDown() then
                             return false
                         end
@@ -1524,28 +1526,39 @@ ____modules = {
                 end
                 local lengthMoved = 0
                 local alternate = 0
-                while lengthMoved < self.length do
+                while lengthMoved < self.length and not done do
                     local j = 0
-                    while j < self.width - 1 do
+                    while j < self.width - 1 and not done do
                         placeFloor(nil)
+                        if done then
+                            break
+                        end
                         self:tryForwards()
                         j = j + 1
                     end
-                    local ____temp_5
+                    local ____temp_7
                     if alternate == 1 then
-                        ____temp_5 = self.turnRight
+                        ____temp_7 = self.turnRight
                     else
-                        ____temp_5 = self.turnLeft
+                        ____temp_7 = self.turnLeft
                     end
-                    local turn = ____temp_5
+                    local turn = ____temp_7
                     turn(nil)
                     placeFloor(nil)
+                    if done then
+                        break
+                    end
                     if lengthMoved < self.length - 1 then
                         if not self:tryForwards() then
                             break
                         end
                         placeFloor(nil)
+                        if done then
+                            break
+                        end
                         turn(nil)
+                    else
+                        done = true
                     end
                     alternate = 1 - alternate
                     lengthMoved = lengthMoved + 1
@@ -1556,9 +1569,9 @@ ____modules = {
             end
             self.runSelectedProgram = function()
                 repeat
-                    local ____switch168 = self.selectedProgram
-                    local ____cond168 = ____switch168 == PROGRAMS.DIG
-                    if ____cond168 then
+                    local ____switch167 = self.selectedProgram
+                    local ____cond167 = ____switch167 == PROGRAMS.MINE
+                    if ____cond167 then
                         do
                             self.length = __TS__ParseInt(self.cliArguments[2], 10)
                             self.width = __TS__ParseInt(self.cliArguments[3], 10)
@@ -1566,8 +1579,8 @@ ____modules = {
                             return
                         end
                     end
-                    ____cond168 = ____cond168 or ____switch168 == PROGRAMS.TUNNEL
-                    if ____cond168 then
+                    ____cond167 = ____cond167 or ____switch167 == PROGRAMS.TUNNEL
+                    if ____cond167 then
                         do
                             self.width = __TS__ParseInt(self.cliArguments[2], 10)
                             self.height = __TS__ParseInt(self.cliArguments[3], 10)
@@ -1576,8 +1589,8 @@ ____modules = {
                             return
                         end
                     end
-                    ____cond168 = ____cond168 or ____switch168 == PROGRAMS.FLOOR
-                    if ____cond168 then
+                    ____cond167 = ____cond167 or ____switch167 == PROGRAMS.FLOOR
+                    if ____cond167 then
                         do
                             self.width = __TS__ParseInt(self.cliArguments[2], 10)
                             self.length = __TS__ParseInt(self.cliArguments[3], 10)
@@ -1617,8 +1630,8 @@ ____modules = {
             self.zDirection = -prevXDirection
         end
         local function main(self, ...)
-            print("\nExcavator Pro by MeguminGG")
-            print("https://github.com/carl-eis")
+            print("\nExcavator Pro by Megumin_GG")
+            print("https://github.com/carl-eis/computer-craft-js")
             print("------------------------------------")
             local TurtleInstance = __TS__New(TurtleEngine, ...)
             if not TurtleInstance:validateArgs() then
