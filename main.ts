@@ -819,8 +819,8 @@ class TurtleEngine {
 }
 
 function main(...args) {
-  print("\nExcavator Pro by MeguminGG")
-  print("https://github.com/carl-eis")
+  print("\nExcavator Pro by Megumin_GG")
+  print("https://github.com/carl-eis/computer-craft-js")
   print("------------------------------------")
 
   const TurtleInstance = new TurtleEngine(...args)
