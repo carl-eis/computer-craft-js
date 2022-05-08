@@ -10,10 +10,6 @@ const FUEL_TYPES = {
   LOG: 'minecraft:log'
 }
 
-const FLOOR_TYPES = {
-  COBBLESTONE: 'minecraft:cobblestone'
-}
-
 const INVENTORY_SIZE = 16
 
 const FUEL_BUFFER_AMOUNT = 2
@@ -80,13 +76,13 @@ function checkFuelExists() {
   return hasFuel
 }
 
-function getSlotContainingItems(itemList: string[] = Object.values(FLOOR_TYPES)): number {
+function getSlotContainingItem(floorItem: string): number {
   for (let i = 0; i < (INVENTORY_SIZE); i++) {
     if (turtle.getItemCount(i+1) > 0) {
       const data = turtle.getItemDetail(i+1)
       const { name } = data as any
 
-      if (itemList.includes(name)) {
+      if (floorItem === name) {
         return i + 1
       }
     }
@@ -677,12 +673,22 @@ class TurtleEngine {
   };
 
   floor = (shiftOne = false) => {
+    let selectedFloorType: string
+    let done = false
+
+    if (turtle.getItemCount(2) > 0) {
+      const { name } = (turtle.getItemDetail(2) as any)
+      selectedFloorType = name
+    }
+
+    print(`Selected floor type: ${selectedFloorType}`)
+
     if (!this.attemptRefuel()) {
       print('Out of fuel.')
       return
     }
 
-    const itemSlot = getSlotContainingItems([FLOOR_TYPES.COBBLESTONE])
+    const itemSlot = getSlotContainingItem(selectedFloorType)
     if (itemSlot === -1) {
       print('No floor items found!')
       return
@@ -698,6 +704,15 @@ class TurtleEngine {
 
     const placeFloor = (): boolean => {
       if (!turtle.placeDown()) {
+        const itemSlot = getSlotContainingItem(selectedFloorType)
+        if (itemSlot === -1) {
+          print('No building materials remaining!')
+          done = true
+          return
+        } else {
+          turtle.select(itemSlot)
+        }
+
         if (turtle.detectDown()) {
           // Blocks are the same, no need to place
           if (turtle.compareDown()) {
@@ -717,13 +732,6 @@ class TurtleEngine {
           sleep(0.1)
         }
 
-        const itemSlot = getSlotContainingItems([FLOOR_TYPES.COBBLESTONE])
-        if (itemSlot === -1) {
-          // TODO: Go back to base if no floor left
-          return false
-        }
-
-        turtle.select(itemSlot)
         if (!turtle.placeDown()) {
           return false
         }
@@ -733,10 +741,13 @@ class TurtleEngine {
     let lengthMoved = 0
     let alternate = 0
 
-    while (lengthMoved < this.length) {
+    while (lengthMoved < this.length && !done) {
       let j = 0;
-      while (j < this.width - 1) {
+      while (j < this.width - 1 && !done) {
         placeFloor()
+        if (done) {
+          break
+        }
         this.tryForwards()
         j++
       }
@@ -745,13 +756,21 @@ class TurtleEngine {
 
       turn()
       placeFloor()
+      if (done) {
+        break
+      }
 
       if (lengthMoved < this.length - 1) {
         if (!this.tryForwards()) {
           break
         }
         placeFloor()
+        if (done) {
+          break
+        }
         turn()
+      } else {
+        done = true
       }
 
       alternate = 1 - alternate
